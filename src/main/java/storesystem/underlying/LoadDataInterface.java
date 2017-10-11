@@ -12,4 +12,5 @@ public interface LoadDataInterface {
     public int read() throws IOException;
     public int read(byte[] buffer) throws IOException;
     public int read(byte[] buffer, int offset, int length) throws IOException;
+    public int read(long position, byte[] buffer, int offset, int length) throws IOException;
 }

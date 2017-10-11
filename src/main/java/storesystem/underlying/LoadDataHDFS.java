@@ -1,5 +1,6 @@
 package storesystem.underlying;
 
+import Utils.SLSystem;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
@@ -21,6 +22,7 @@ public class LoadDataHDFS implements LoadDataInterface {
         try {
             fileSystem = FileSystem.get(URI.create(this.uri), new Configuration());
             fsDataInputStream = fileSystem.open(new Path(this.uri));
+
         } catch (IOException e) {
             System.out.println("Error at LoadDataHDFS...");
             e.printStackTrace();
@@ -58,6 +60,10 @@ public class LoadDataHDFS implements LoadDataInterface {
 
     public int read(byte[] buffer, int offset, int length) throws IOException {
         return fsDataInputStream.read(buffer,offset,length);
+    }
+
+    public int read(long position, byte[] buffer, int offset, int length) throws IOException{
+        return fsDataInputStream.read(position, buffer, offset, length);
     }
 
     public static void main(String... args) throws IOException {

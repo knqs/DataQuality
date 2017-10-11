@@ -1,11 +1,14 @@
 package storesystem.middlelayer;
 
+import Utils.DataFormatException;
+import Utils.RecordsUtils;
 import Utils.SLSystem;
 import storesystem.underlying.LoadDataHDFS;
 import storesystem.underlying.LoadDataInterface;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 public class LoadRecords implements LoadRecordsInterface {
@@ -14,7 +17,14 @@ public class LoadRecords implements LoadRecordsInterface {
     String tableName;
     LoadDataInterface loadData;
 
-    ArrayList<String> attrAndType = new ArrayList<String>();
+    int Pos = 1;
+
+    ArrayList<byte[]> attrAndType = new ArrayList<byte[]>();
+
+    // 记录每种属性的取值类型0 int 1 double 2 string
+    private byte[] AttrInfo;
+    // 记录每条记录的开始地址
+    private byte[] HeadInfo;
 
     public LoadRecords(String dataBaseName, String tableName) throws IOException {
         this.dataBaseName = dataBaseName;
@@ -25,73 +35,176 @@ public class LoadRecords implements LoadRecordsInterface {
     private void Init() throws IOException {
         String uri = SLSystem.getURI(dataBaseName, tableName);
         loadData = new LoadDataHDFS(uri);
-        checkDatabase();
-        getAttributes();
+
+        byte[] attrNumT = new byte[4];
+        byte[] recordNumT = new byte[4];
+        loadData.read(8, attrNumT, 0,4);
+        loadData.read(12, recordNumT, 0,4);
+        int recordNum = SLSystem.byteArrayToInt(recordNumT,0);
+        int attrNum = SLSystem.byteArrayToInt(attrNumT,0);
+        HeadInfo = new byte[recordNum * 4 + 4];
+        AttrInfo = new byte[attrNum];
+
+        getHeadInfo();
+        
+//        System.out.println("recordNum = " + recordNum + "attrNum = " + attrNum);
+
+        byte[] attrS = new byte[4];
+        byte[] attrE = new byte[4];
+        loadData.read(16,attrS,0,4);
+        loadData.read(attrNum * 4 + 16, attrE,0,4);
+        int attrSI = SLSystem.byteArrayToInt(attrS,0);
+        int attrEI = SLSystem.byteArrayToInt(attrE,0);
+        byte[] attrLocation = new byte[attrNum * 4];
+        byte[] attrAll = new byte[attrEI - attrSI];
+//        System.out.println("attrEI = " + attrEI + "attrSI = " + attrSI);
+        loadData.read(16, attrLocation,0,attrLocation.length);
+        loadData.read((attrNum + 4) * 4, HeadInfo,0, HeadInfo.length);
+        loadData.read(attrSI, attrAll,0,attrAll.length);
+
+        int[] attrL = SLSystem.byteArrayToIntArray(attrLocation);
+        int base = attrSI;
+//        for (int i = 0;i < attrAll.length;i ++){
+//            System.out.println("attrAll[" + i + "] = " + attrAll[i]);
+//        }
+        for (int i = 0;i < attrL.length;i ++){
+            AttrInfo[i] = attrAll[attrL[i] - base];
+//            System.out.println("AttrInfo[" + i + "] = " + AttrInfo[i]);
+            byte[] tmp;
+            if (i < attrL.length - 1)
+                tmp = getPartByte(attrAll,attrL[i] - base,attrL[i+1] - base);
+            else
+                tmp = getPartByte(attrAll,attrL[i] - base, attrAll.length);
+            attrAndType.add(tmp);
+        }
     }
 
-    private void getAttributes() throws IOException {
-        String str;
-        String[] strs;
-        while(true){
-            str = loadData.readLine();
-            strs = str.split(" ");
-            if(strs[0].toLowerCase().equals("@data")){
-                break ;
-            }
-            else if(!strs[0].toLowerCase().equals("@attributes")){
-                System.err.print("DataError in Database " + dataBaseName + " and table " + tableName);
+    private byte[] getPartByte(byte[] attrAll, int s, int e) {
+        byte[] tmp = new byte[e - s];
+//        System.out.println("s = " + s + " e " + e + " attrAll.length = " + attrAll.length);
+        for (int i = 0;i < tmp.length;i ++){
+            tmp[i] = attrAll[i + s];
+        }
+        return tmp;
+    }
+
+//    private void getAttributes() throws IOException {
+//        String str;
+//        String[] strs;
+//        while(true){
+//            str = loadData.readLine();
+//            strs = str.split(RecordsUtils.headSplitLabel);
+//            if(strs[0].toLowerCase().equals("@data")){
+//                break ;
+//            }
+//            else if(!strs[0].toLowerCase().equals("@attributes")){
+//                System.err.print("DataError in Database " + dataBaseName + " and table " + tableName);
+//                break;
+//            }
+//            else{
+//                attrAndType.add(strs[1]);
+//                attrAndType.add(strs[2]);
+//            }
+//        }
+//    }
+//
+//    /**
+//     * 检查数据库是否一致
+//     */
+//    private void checkDatabase() throws IOException {
+//        String[] strs1, strs2;
+//        String str1, str2;
+//        if ((str1 = loadData.readLine()) == null){
+//            System.err.print("Database Name Error!");
+//        }
+//        if ((str2 = loadData.readLine()) == null){
+//            System.err.print("Table Name Error!");
+//        }
+//        strs1 = str1.split(RecordsUtils.headSplitLabel); //分隔符依据指定的数据格式
+//        strs2 = str2.split(RecordsUtils.headSplitLabel);
+//        if(strs1[1].equals(dataBaseName) && strs2[1].equals(tableName)){
+//        } else {
+//            System.err.print("Error! databaseName or tableName inconsistency!");
+//        }
+//    }
+
+    @Override
+    public String getRecord() throws IOException, DataFormatException {
+        return getNRecord(Pos ++);
+    }
+
+    @Override
+    public String getRecords(int num) throws IOException, DataFormatException {
+        StringBuffer result = new StringBuffer();
+        for (int i = 0;i < num;i ++){
+            if (Pos * 4 >= HeadInfo.length){
                 break;
             }
             else{
-                attrAndType.add(strs[1]);
-                attrAndType.add(strs[2]);
+                result.append(getNRecord(Pos ++));
+                result.append("\n");
             }
         }
-    }
-
-    /**
-     * 检查数据库是否一致
-     */
-    private void checkDatabase() throws IOException {
-        String[] strs1, strs2;
-        String str1, str2;
-        if ((str1 = loadData.readLine()) == null){
-            System.err.print("Database Name Error!");
-        }
-        if ((str2 = loadData.readLine()) == null){
-            System.err.print("Table Name Error!");
-        }
-        strs1 = str1.split(" "); //分隔符依据指定的数据格式
-        strs2 = str2.split(" ");
-        if(strs1[1].equals(dataBaseName) && strs2[1].equals(tableName)){
-        } else {
-            System.err.print("Error! databaseName or tableName inconsistency!");
-        }
+        return new String(result);
     }
 
     @Override
-    public String getRecord() throws IOException {
-        return loadData.readLine();
-    }
+    public String getNRecord(int num) throws IOException, DataFormatException {
+        num --;
+        if (num * 4 + 4 >= HeadInfo.length){
+            return null;
+        }
+        int S = SLSystem.byteArrayToInt(HeadInfo,num * 4);
+        int E = SLSystem.byteArrayToInt(HeadInfo,num * 4 + 4);
 
-    @Override
-    public String getRecords(int num) throws IOException {
-        String result = "";
-        String str;
-        for(int i = 0;i < num;i ++){
-            if((str = loadData.readLine()) != null) {
-                result += str + "\n";
-            } else {
-                break;
+        byte[] res = new byte[E - S];
+//        System.out.println(S + " " + E);
+        loadData.read(S, res,0,res.length);
+        StringBuffer result = new StringBuffer("");
+        int offset = 0;
+//        System.out.println("res.length = " + res.length);
+        for (int i = 0;i < AttrInfo.length;i ++){
+            switch (AttrInfo[i]){
+                case 0:
+                    result.append(SLSystem.byteArrayToInt(res, offset));
+                    result.append(RecordsUtils.recordSplitLabel);
+                    offset += 4;
+//                    System.out.println(result);
+                    break;
+                case 1:
+                    result.append(SLSystem.byteToDouble(res, offset));
+                    result.append(RecordsUtils.recordSplitLabel);
+                    offset += 8;
+//                    System.out.println(result);
+                    break;
+                case 2:
+                    int len = SLSystem.byteArrayToInt(res,offset);
+                    offset += 4;
+                    result.append(new String(Arrays.copyOfRange(res,offset,offset + len)));
+                    result.append(RecordsUtils.recordSplitLabel);
+                    offset += len;
+//                    System.out.println(result);
+                    break;
+                default:
+//                    System.out.println("Data Format Error! " + AttrInfo[i] + " " + i);
+                    throw new DataFormatException("Data Format Error! " + AttrInfo[i]);
             }
         }
-
-        if(result.equals("")) return null;
-        else return result;
+        return new String(result);
     }
 
     @Override
-    public List<String> getAttrsAndType() {
+    public List<byte[]> getAttrsAndType() {
         return attrAndType;
+    }
+
+    public void getHeadInfo() throws IOException {
+
+        byte[] tmp = new byte[4];
+        for(int i = 0;i < 12;i ++){
+            loadData.read(tmp,0,4);
+        }
+
+        return ;
     }
 }
