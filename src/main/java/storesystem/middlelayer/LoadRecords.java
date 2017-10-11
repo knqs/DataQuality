@@ -23,8 +23,33 @@ public class LoadRecords implements LoadRecordsInterface {
 
     // 记录每种属性的取值类型0 int 1 double 2 string
     private byte[] AttrInfo;
+
+    public byte[] getAttrAll() {
+        return attrAll;
+    }
+
+    public byte[] getBodyAll() {
+        return bodyAll;
+    }
+
     // 记录每条记录的开始地址
     private byte[] HeadInfo;
+
+    public byte[] getHeadAll() {
+        return headAll;
+    }
+
+    private byte[] headAll;
+    // 记录所有的属性信息
+    private byte[] attrAll;
+    // 记录所有的数据内容
+    private byte[] bodyAll;
+
+    public byte[] getDBInfo() {
+        return DBInfo;
+    }
+
+    private byte[] DBInfo;
 
     public LoadRecords(String dataBaseName, String tableName) throws IOException {
         this.dataBaseName = dataBaseName;
@@ -36,32 +61,41 @@ public class LoadRecords implements LoadRecordsInterface {
         String uri = SLSystem.getURI(dataBaseName, tableName);
         loadData = new LoadDataHDFS(uri);
 
+        byte[] DBl = new byte[4];
         byte[] attrNumT = new byte[4];
         byte[] recordNumT = new byte[4];
+        loadData.read(0,DBl,0,4);
         loadData.read(8, attrNumT, 0,4);
         loadData.read(12, recordNumT, 0,4);
         int recordNum = SLSystem.byteArrayToInt(recordNumT,0);
         int attrNum = SLSystem.byteArrayToInt(attrNumT,0);
+        int DBL = SLSystem.byteArrayToInt(DBl,0);
         HeadInfo = new byte[recordNum * 4 + 4];
         AttrInfo = new byte[attrNum];
-
-        getHeadInfo();
-        
 //        System.out.println("recordNum = " + recordNum + "attrNum = " + attrNum);
 
         byte[] attrS = new byte[4];
         byte[] attrE = new byte[4];
+        byte[] bodyE = new byte[4];
         loadData.read(16,attrS,0,4);
         loadData.read(attrNum * 4 + 16, attrE,0,4);
+        loadData.read(attrNum * 4 + recordNum * 4 + 16, bodyE,0,4);
         int attrSI = SLSystem.byteArrayToInt(attrS,0);
         int attrEI = SLSystem.byteArrayToInt(attrE,0);
+        int bodyEI = SLSystem.byteArrayToInt(bodyE,0);
         byte[] attrLocation = new byte[attrNum * 4];
-        byte[] attrAll = new byte[attrEI - attrSI];
+
+        DBInfo = new byte[attrSI - DBL];
+        attrAll = new byte[attrEI - attrSI];
+        bodyAll = new byte[bodyEI - attrEI];
+        headAll = new byte[(5 + attrNum + recordNum) * 4];
 //        System.out.println("attrEI = " + attrEI + "attrSI = " + attrSI);
         loadData.read(16, attrLocation,0,attrLocation.length);
         loadData.read((attrNum + 4) * 4, HeadInfo,0, HeadInfo.length);
+        loadData.read(0,headAll,0,headAll.length);
+        loadData.read(DBL,DBInfo,0,DBInfo.length);
         loadData.read(attrSI, attrAll,0,attrAll.length);
-
+        loadData.read(attrEI, bodyAll,0,bodyAll.length);
         int[] attrL = SLSystem.byteArrayToIntArray(attrLocation);
         int base = attrSI;
 //        for (int i = 0;i < attrAll.length;i ++){
@@ -186,7 +220,7 @@ public class LoadRecords implements LoadRecordsInterface {
 //                    System.out.println(result);
                     break;
                 default:
-//                    System.out.println("Data Format Error! " + AttrInfo[i] + " " + i);
+                    System.out.println("Data Format Error! " + AttrInfo[i] + " " + i);
                     throw new DataFormatException("Data Format Error! " + AttrInfo[i]);
             }
         }
@@ -198,13 +232,4 @@ public class LoadRecords implements LoadRecordsInterface {
         return attrAndType;
     }
 
-    public void getHeadInfo() throws IOException {
-
-        byte[] tmp = new byte[4];
-        for(int i = 0;i < 12;i ++){
-            loadData.read(tmp,0,4);
-        }
-
-        return ;
-    }
 }

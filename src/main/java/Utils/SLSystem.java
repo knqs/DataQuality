@@ -74,4 +74,15 @@ public class SLSystem {
         }
         return result;
     }
+    // int数组转字节数组
+    public static byte[] intArrayToByteArray(int[] ints){
+        byte[] result = new byte[ints.length * 4];
+
+        for (int i = 0;i < ints.length;i ++){
+            byte[] tmp = intToByteArray(ints[i]);
+            System.arraycopy(tmp,0,result,i * 4,4);
+        }
+
+        return result;
+    }
 }
