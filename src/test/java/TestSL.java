@@ -9,7 +9,7 @@ public class TestSL {
     public static void main(String... args){
         StoreRecords storeRecords = new StoreRecords();
         try {
-//            storeRecords.storeRecords("C:/Users/kongn/Documents/test2.txt", "KNQ", "KNQtable");
+            storeRecords.storeRecords("C:/Users/kongn/Documents/test2.txt", "KNQ", "KNQtable");
             storeRecords.appendRecords("6 \"No.6\" 6.0 null", "KNQ", "KNQtable");
             LoadRecords loadRecords = new LoadRecords("KNQ", "KNQtable");
             String str;
@@ -17,7 +17,7 @@ public class TestSL {
 //            while((str = loadRecords.getRecord()) != null){
 //                System.out.println(str);
 //            }
-            System.out.println(loadRecords.getNRecord(6));
+            System.out.println(loadRecords.getNRecord(2));
         } catch (IOException e) {
             e.printStackTrace();
         } catch (DataFormatException e) {

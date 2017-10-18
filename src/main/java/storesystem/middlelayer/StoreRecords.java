@@ -3,7 +3,6 @@ package storesystem.middlelayer;
 import Utils.DataFormatException;
 import Utils.RecordsUtils;
 import Utils.SLSystem;
-import Utils.VersCtl;
 import storesystem.underlying.StoreDataHDFS;
 
 import java.io.BufferedReader;
@@ -11,7 +10,6 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 
 public class StoreRecords implements StoreRecordsInterface {
@@ -143,7 +141,7 @@ public class StoreRecords implements StoreRecordsInterface {
         return SLSystem.doubleToByte(num);
     }
     @Override
-    public boolean appendRecords(String record, String database, String table) throws IOException, DataFormatException {
+    public int appendRecords(String record, String database, String table) throws IOException, DataFormatException {
         LoadRecords loadRecords = new LoadRecords(database,table);
         byte[] oldHead = loadRecords.getHeadAll();
         byte[] DBInfo = loadRecords.getDBInfo();
@@ -175,7 +173,7 @@ public class StoreRecords implements StoreRecordsInterface {
         String dst = SLSystem.getURI(database,table);
         StoreDataHDFS storeDataHDFS = new StoreDataHDFS(dst);
         storeDataHDFS.storeData(arrayList);
-        return true;
+        return SLSystem.byteArrayToInt(newHead,12);
     }
 
     private byte[] addN(byte[] oldHead, int num) {

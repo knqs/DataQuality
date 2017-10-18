@@ -9,6 +9,9 @@ public class SLSystem {
         return "hdfs://localhost:9000/database_" + databaseName + '/' + tableName;
     }
 
+    public static String getURIVersion(String database, String table) {
+        return "hdfs://localhost:9000/database_" + database + '/' + table + "VersionCtl";
+    }
     //int转字节数组
     public static byte[] intToByteArray(int i) {
         byte[] result = new byte[4];
@@ -85,4 +88,5 @@ public class SLSystem {
 
         return result;
     }
+
 }
