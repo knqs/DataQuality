@@ -76,7 +76,19 @@ public class StoreDataHDFS implements StoreDataInterface {
 
     @Override
     public boolean addData(byte[] data) throws IOException {
-        return false;
+        FSDataInputStream fsDataInputStream = fileSystem.open(new Path(uri));
+        String str;
+        String tmp = "";
+        while((str = fsDataInputStream.readLine()) != null){
+            tmp += str + "\r\n";
+        }
+        fsDataInputStream.close();
+        fsDataOutputStream.writeBytes(tmp);
+        fsDataOutputStream.write(data);
+        fsDataOutputStream.flush();
+
+        System.out.println();
+        return true;
     }
 
     /**
@@ -93,7 +105,6 @@ public class StoreDataHDFS implements StoreDataInterface {
             tmp += str + "\r\n";
         }
         fsDataInputStream.close();
-
         fsDataOutputStream.writeBytes(tmp);
         fsDataOutputStream.writeBytes(data);
         fsDataOutputStream.flush();

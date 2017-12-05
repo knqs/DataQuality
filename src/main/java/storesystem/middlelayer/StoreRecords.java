@@ -94,6 +94,8 @@ public class StoreRecords implements StoreRecordsInterface {
             Offset += AttrInfo.get(i + 1).length + 1;
             HeadInfo.add(getBytes(Offset));
         }
+        HeadInfo.add(DBName);
+        HeadInfo.add(TblName);
         HeadInfo.addAll(AttrInfo);
 
         recordStart = Offset;
@@ -118,79 +120,7 @@ public class StoreRecords implements StoreRecordsInterface {
         return true;
     }
 
-//    private void storeData(StoreDataHDFS storeDataHDFS, ArrayList<String> datas) throws DataFormatException, IOException {
-//        int attrNum = 0;
-//        int recordNum = 0;
-//        byte[] DBName = datas.get(0).getBytes();
-//        byte[] TblName = datas.get(1).getBytes();
-//        ArrayList<byte[]> HeadInfo = new ArrayList<>();
-//        ArrayList<byte[]> AttrInfo = new ArrayList<>();
-//        ArrayList<byte[]> BodyInfo = new ArrayList<>();
-//        for (int i = 2;;i ++){
-//            String[] strs = datas.get(i).split(RecordsUtils.headSplitLabel);
-//            if (strs[0].equals("@data")){
-//                break ;
-//            }
-//            else if (strs[0].equals("@attributes")){
-//                if (strs.length != 3){
-//                    System.out.println(strs.length);
-//                    throw new DataFormatException("DataFormat Error! Attributes num is " + attrNum + 1);
-//                }
-//                if (strs[2].equals("int")){
-//                    AttrInfo.add(new byte[]{0});
-//                }
-//                else if (strs[2].equals("double")){
-//                    AttrInfo.add(new byte[]{1});
-//                }
-//                else if (strs[2].equals("string")){
-//                    AttrInfo.add(new byte[]{2});
-//                }
-//                else{
-//                    System.out.println(strs[2]);
-//                    throw new DataFormatException("DataFormat Error! Attributes num is " + attrNum + 1);
-//                }
-//                AttrInfo.add(strs[1].getBytes());
-//                attrNum ++;
-//            }
-//            else{
-//                throw new DataFormatException("DataFormat Error!");
-//            }
-//        }
-//
-//        recordNum = datas.size() - attrNum - 3;
-//
-//        int BasicLocation = 4 * (5 + recordNum + attrNum);
-//        int Offset = BasicLocation;
-//        HeadInfo.add(getBytes(Offset));
-//        Offset += DBName.length;
-//        HeadInfo.add(getBytes(Offset));
-//        Offset += TblName.length;
-//        HeadInfo.add(getBytes(attrNum));
-//        HeadInfo.add(getBytes(recordNum));
-//
-//        HeadInfo.add(getBytes(Offset));
-//        for (int i = 0;i < AttrInfo.size();i += 2){
-//            Offset += AttrInfo.get(i + 1).length + 1;
-//            HeadInfo.add(getBytes(Offset));
-//        }
-//
-//        for (int i = attrNum + 3;i < datas.size();i ++){
-////            System.out.println(datas.get(i));
-//            byte[] tmp = getDataBytes(AttrInfo,datas.get(i));
-//            int len = tmp.length;
-//            BodyInfo.add(tmp);
-//            Offset += len;
-//            HeadInfo.add(getBytes(Offset));
-//        }
-//        HeadInfo.add(DBName);
-//        HeadInfo.add(TblName);
-//        HeadInfo.addAll(AttrInfo);
-//        HeadInfo.addAll(BodyInfo);
-//
-//        storeDataHDFS.storeData(HeadInfo);
-//    }
-//
-    private byte[] getDataBytes(ArrayList<byte[]> attrInfo, String s) throws DataFormatException {
+    private byte[] getDataBytes(List<byte[]> attrInfo, String s) throws DataFormatException {
         String[] strs = s.split(RecordsUtils.recordSplitLabel);
         ArrayList<Byte> arrayList = new ArrayList<>();
         for (int i = 0;i < strs.length;i ++){
@@ -231,38 +161,42 @@ public class StoreRecords implements StoreRecordsInterface {
     }
     @Override
     public int appendRecords(String record, String database, String table) throws IOException, DataFormatException {
-        LoadRecords loadRecords = new LoadRecords(database,table);
+        LoadRecords loadRecords = new LoadRecords(database, table);
         byte[] oldHead = loadRecords.getHeadAll();
-        byte[] DBInfo = loadRecords.getDBInfo();
-        byte[] attrAll = loadRecords.getAttrAll();
-        byte[] oldBody = loadRecords.getBodyAll();
+        byte[] headInfo = loadRecords.getHeadInfo();
+        List<byte[]> attrInfo = loadRecords.getAttrsAndType();
+        byte[] newHeadInfo = new byte[headInfo.length + 4];
+        int basicRecords = loadRecords.getBasicRecords();
 
-        byte[] newHead = new byte[oldHead.length + 4];
+        headInfo = addN(headInfo,4);
+        int totalnum = SLSystem.byteArrayToInt(oldHead, 16) + 1;
+        byte[] totalnumByte = SLSystem.intToByteArray(totalnum);
+        System.arraycopy(totalnumByte ,0, oldHead, 16, 4); // 这四条语句用来修改总记录数
 
-        oldHead = addN(oldHead,4);
+        byte[] newrecord = getDataBytes(attrInfo, record); // 获取新纪录的byte数组
 
-        byte[] newrecord = getDataBytes(oldHead,attrAll,record);
-
-        int lasInd = SLSystem.byteArrayToInt(oldHead,oldHead.length - 4);
-//        System.out.println("lasInd = " + lasInd);
-//        System.out.println("newrecord = " + newrecord.length);
+        int lasInd = SLSystem.byteArrayToInt(headInfo,headInfo.length - 4);
+        if (totalnum == basicRecords + 1) lasInd = 0;
 
         byte[] newLen = SLSystem.intToByteArray(newrecord.length + lasInd);
-        System.arraycopy(oldHead,0,newHead,0,oldHead.length);
-        System.arraycopy(newLen,0,newHead,oldHead.length,newLen.length);
-        byte[] newBody = new byte[oldBody.length + newrecord.length];
-        System.arraycopy(oldBody,0,newBody,0,oldBody.length);
-        System.arraycopy(newrecord,0,newBody,oldBody.length,newrecord.length);
+        System.arraycopy(headInfo, 0, newHeadInfo, 0, headInfo.length);
+        System.arraycopy(newLen, 0, newHeadInfo, headInfo.length, newLen.length);
 
         ArrayList<byte[]> arrayList = new ArrayList<>();
-        arrayList.add(newHead);
-        arrayList.add(DBInfo);
-        arrayList.add(attrAll);
-        arrayList.add(newBody);
+        arrayList.add(oldHead);
+        arrayList.add(newHeadInfo);
+        // 存储headinfo
         String dst = SLSystem.getURI(database,table);
         StoreDataHDFS storeDataHDFS = new StoreDataHDFS(dst);
         storeDataHDFS.storeData(arrayList);
-        return SLSystem.byteArrayToInt(newHead,12);
+        storeDataHDFS.close();
+        // 存储append information
+        dst = SLSystem.getURIAppend(database, table);
+        StoreDataHDFS storeDataHDFS1 = new StoreDataHDFS(dst);
+        storeDataHDFS1.addData(newrecord);
+        storeDataHDFS.close();
+
+        return SLSystem.byteArrayToInt(oldHead,16);
     }
 
     private byte[] addN(byte[] oldHead, int num) {
