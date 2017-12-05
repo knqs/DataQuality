@@ -273,13 +273,14 @@ public class VersionCtl {
         int totalnum = storeRecords.appendRecords(record,database,table);
 
         int totalV = headInfoI[0];
+        // 获得不同版本记录的信息
         byte[] pre = getVersionBody(loadDataHDFS,0,versionNum);
         byte[] oldV = getVersionBody(loadDataHDFS,versionNum, versionNum + 1);
 //        System.out.println(versionNum + " " + totalV);
         byte[] las = getVersionBody(loadDataHDFS,versionNum + 1,totalV);
 
         int[] oldVI = SLSystem.byteArrayToIntArray(oldV);
-        oldVI[2] ++;
+        oldVI[2] ++; // 增加的记录数加一
 //        System.out.println("oldVI[2] = " + oldVI[2]);
         int[] newVI = new int[oldVI.length + 1];
 //        System.out.println("newvI.length = " + newVI.length);
