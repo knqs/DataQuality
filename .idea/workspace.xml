@@ -4,12 +4,7 @@
     <bookmark url="file://$PROJECT_DIR$/src/main/java/storesystem/middlelayer/VersionCtl.java" line="553" mnemonic="9" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="1a686348-c53e-486c-a61a-7e4cb9aff435" name="Default" comment="">
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/.idea/workspace.xml" afterPath="$PROJECT_DIR$/.idea/workspace.xml" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/main/java/Utils/SLSystem.java" afterPath="$PROJECT_DIR$/src/main/java/Utils/SLSystem.java" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/main/java/storesystem/middlelayer/StoreRecords.java" afterPath="$PROJECT_DIR$/src/main/java/storesystem/middlelayer/StoreRecords.java" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/main/java/storesystem/underlying/StoreDataHDFS.java" afterPath="$PROJECT_DIR$/src/main/java/storesystem/underlying/StoreDataHDFS.java" />
-    </list>
+    <list default="true" id="1a686348-c53e-486c-a61a-7e4cb9aff435" name="Default" comment="" />
     <ignored path="$PROJECT_DIR$/out/" />
     <ignored path="$PROJECT_DIR$/target/" />
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
@@ -46,8 +41,8 @@
       <file leaf-file-name="StoreRecords.java" pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/src/main/java/storesystem/middlelayer/StoreRecords.java">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="142">
-              <caret line="111" column="24" lean-forward="false" selection-start-line="111" selection-start-column="24" selection-end-line="111" selection-end-column="24" />
+            <state relative-caret-position="270">
+              <caret line="20" column="0" lean-forward="true" selection-start-line="20" selection-start-column="0" selection-end-line="20" selection-end-column="0" />
               <folding />
             </state>
           </provider>
@@ -421,12 +416,12 @@
       <workItem from="1510061589494" duration="660000" />
       <workItem from="1510100862484" duration="3800000" />
       <workItem from="1510235695907" duration="864000" />
-      <workItem from="1512439532324" duration="3382000" />
+      <workItem from="1512439532324" duration="4581000" />
     </task>
     <servers />
   </component>
   <component name="TimeTrackingManager">
-    <option name="totallyTimeSpent" value="72707000" />
+    <option name="totallyTimeSpent" value="73906000" />
   </component>
   <component name="ToolWindowManager">
     <frame x="-11" y="-11" width="1942" height="1042" extended-state="6" />
@@ -915,8 +910,8 @@
     </entry>
     <entry file="file://$PROJECT_DIR$/src/main/java/storesystem/middlelayer/StoreRecords.java">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="142">
-          <caret line="111" column="24" lean-forward="false" selection-start-line="111" selection-start-column="24" selection-end-line="111" selection-end-column="24" />
+        <state relative-caret-position="270">
+          <caret line="20" column="0" lean-forward="true" selection-start-line="20" selection-start-column="0" selection-end-line="20" selection-end-column="0" />
           <folding />
         </state>
       </provider>
