@@ -28,6 +28,12 @@ public class StoreDataHDFS implements StoreDataInterface {
         this.uri = uri;
         try {
             fileSystem = FileSystem.get(URI.create(this.uri), new Configuration());
+            fsDataOutputStream = fileSystem.create(new Path(uri), new Progressable() {
+                @Override
+                public void progress() {
+                    System.out.print(".");
+                }
+            });
         } catch (IOException e) {
             System.err.print("Error at StoreDataHDFS...");
             e.printStackTrace();
@@ -44,13 +50,6 @@ public class StoreDataHDFS implements StoreDataInterface {
      * @throws DataFormatException
      */
     public boolean storeData(List<byte[]> datas) throws IOException, DataFormatException {
-        fsDataOutputStream = fileSystem.create(new Path(uri), new Progressable() {
-            @Override
-            public void progress() {
-                System.out.print(".");
-            }
-        });
-
         datas.forEach(data -> {
             try {
                 fsDataOutputStream.write(data);
@@ -60,10 +59,18 @@ public class StoreDataHDFS implements StoreDataInterface {
         });
 
         fsDataOutputStream.flush();
-        fsDataOutputStream.close();
-
         System.out.println();
+        return true;
+    }
 
+    public boolean storeData(byte[] data) throws IOException, DataFormatException {
+        fsDataOutputStream.write(data);
+        fsDataOutputStream.flush();
+        return true;
+    }
+
+    public boolean close() throws IOException {
+        fsDataOutputStream.close();
         return true;
     }
 
@@ -87,19 +94,11 @@ public class StoreDataHDFS implements StoreDataInterface {
         }
         fsDataInputStream.close();
 
-        fsDataOutputStream = fileSystem.create(new Path(uri), new Progressable() {
-            @Override
-            public void progress() {
-                System.out.print(".");
-            }
-        });
         fsDataOutputStream.writeBytes(tmp);
         fsDataOutputStream.writeBytes(data);
         fsDataOutputStream.flush();
-        fsDataOutputStream.close();
 
         System.out.println();
-
         return true;
     }
 }

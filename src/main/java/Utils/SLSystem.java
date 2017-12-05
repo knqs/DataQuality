@@ -10,7 +10,14 @@ public class SLSystem {
     }
 
     public static String getURIVersion(String database, String table) {
-        return "hdfs://localhost:9000/database_" + database + '/' + table + "VersionCtl";
+        return "hdfs://localhost:9000/database_" + database + '/' + table + "_VersionCtl";
+    }
+    public static String getURIHead(String database, String table) {
+        return "hdfs://localhost:9000/database_" + database + '/' + table + "_Head";
+    }
+
+    public static String getURIAppend(String database, String table) {
+        return "hdfs://localhost:9000/database_" + database + '/' + table + "_Append";
     }
     //int转字节数组
     public static byte[] intToByteArray(int i) {

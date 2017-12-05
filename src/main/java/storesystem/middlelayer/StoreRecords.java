@@ -18,27 +18,38 @@ public class StoreRecords implements StoreRecordsInterface {
     public boolean storeRecords(String src, String database, String table) throws IOException, DataFormatException {
         String dst = SLSystem.getURI(database,table);
         StoreDataHDFS storeDataHDFS = new StoreDataHDFS(dst);
-        BufferedReader bufferedReader = new BufferedReader(new FileReader(src));
-        String str;
-        ArrayList<String> arrayList = new ArrayList<>();
-        while((str = bufferedReader.readLine()) != null){
-//            arrayList.add(str + RecordsUtils.recordSplitLabel + VersCtl.getVersNum() + "\r\n");
-            arrayList.add(str);
-        }
-        storeData(storeDataHDFS, arrayList);
-        return true;
-    }
 
-    private void storeData(StoreDataHDFS storeDataHDFS, ArrayList<String> datas) throws DataFormatException, IOException {
+        String dstHead = SLSystem.getURIHead(database, table);
+        StoreDataHDFS storeDataHDFSHead = new StoreDataHDFS(dstHead);
+
+        BufferedReader bufferedReader = new BufferedReader(new FileReader(src));
+
+
+        String str;
+
         int attrNum = 0;
         int recordNum = 0;
-        byte[] DBName = datas.get(0).getBytes();
-        byte[] TblName = datas.get(1).getBytes();
+        byte[] DBName;
+        byte[] TblName;
+        if ((str = bufferedReader.readLine()) != null){
+            DBName = str.getBytes();
+        }
+        else{
+            return false;
+        }
+        if ((str = bufferedReader.readLine()) != null){
+            TblName = str.getBytes();
+        }
+        else {
+            return false;
+        }
+
         ArrayList<byte[]> HeadInfo = new ArrayList<>();
         ArrayList<byte[]> AttrInfo = new ArrayList<>();
-        ArrayList<byte[]> BodyInfo = new ArrayList<>();
-        for (int i = 2;;i ++){
-            String[] strs = datas.get(i).split(RecordsUtils.headSplitLabel);
+
+        // 获取属性信息 Attributes
+        while((str = bufferedReader.readLine()) != null){
+            String[] strs = str.split(RecordsUtils.headSplitLabel);
             if (strs[0].equals("@data")){
                 break ;
             }
@@ -68,39 +79,117 @@ public class StoreRecords implements StoreRecordsInterface {
             }
         }
 
-        recordNum = datas.size() - attrNum - 3;
-
-        int BasicLocation = 4 * (5 + recordNum + attrNum);
-        int Offset = BasicLocation;
+        int Offset = (5 + AttrInfo.size()) * 4;
+        int recordStart = 0;
         HeadInfo.add(getBytes(Offset));
         Offset += DBName.length;
         HeadInfo.add(getBytes(Offset));
         Offset += TblName.length;
         HeadInfo.add(getBytes(attrNum));
-        HeadInfo.add(getBytes(recordNum));
+        HeadInfo.add(getBytes(recordStart));
+        HeadInfo.add(getBytes(recordNum)); // 只是占据一个位置
 
         HeadInfo.add(getBytes(Offset));
         for (int i = 0;i < AttrInfo.size();i += 2){
             Offset += AttrInfo.get(i + 1).length + 1;
             HeadInfo.add(getBytes(Offset));
         }
-
-
-        for (int i = attrNum + 3;i < datas.size();i ++){
-//            System.out.println(datas.get(i));
-            byte[] tmp = getDataBytes(AttrInfo,datas.get(i));
-            int len = tmp.length;
-            BodyInfo.add(tmp);
-            Offset += len;
-            HeadInfo.add(getBytes(Offset));
-        }
-        HeadInfo.add(DBName);
-        HeadInfo.add(TblName);
         HeadInfo.addAll(AttrInfo);
-        HeadInfo.addAll(BodyInfo);
 
-        storeDataHDFS.storeData(HeadInfo);
+        recordStart = Offset;
+        Offset = 0;
+        while ((str = bufferedReader.readLine()) != null){
+            byte[] tmp = getDataBytes(AttrInfo, str);
+            int len = tmp.length;
+
+            storeDataHDFS.storeData(tmp);
+
+            recordNum ++;
+            HeadInfo.add(getBytes(Offset));
+            Offset += len;
+        }
+        HeadInfo.set(3, getBytes(recordStart)); // 真正记录recordStart
+        HeadInfo.set(4, getBytes(recordNum)); // 真正记录recordNum
+
+        storeDataHDFSHead.storeData(HeadInfo);
+
+        storeDataHDFSHead.close();
+        storeDataHDFS.close();
+        return true;
     }
+
+//    private void storeData(StoreDataHDFS storeDataHDFS, ArrayList<String> datas) throws DataFormatException, IOException {
+//        int attrNum = 0;
+//        int recordNum = 0;
+//        byte[] DBName = datas.get(0).getBytes();
+//        byte[] TblName = datas.get(1).getBytes();
+//        ArrayList<byte[]> HeadInfo = new ArrayList<>();
+//        ArrayList<byte[]> AttrInfo = new ArrayList<>();
+//        ArrayList<byte[]> BodyInfo = new ArrayList<>();
+//        for (int i = 2;;i ++){
+//            String[] strs = datas.get(i).split(RecordsUtils.headSplitLabel);
+//            if (strs[0].equals("@data")){
+//                break ;
+//            }
+//            else if (strs[0].equals("@attributes")){
+//                if (strs.length != 3){
+//                    System.out.println(strs.length);
+//                    throw new DataFormatException("DataFormat Error! Attributes num is " + attrNum + 1);
+//                }
+//                if (strs[2].equals("int")){
+//                    AttrInfo.add(new byte[]{0});
+//                }
+//                else if (strs[2].equals("double")){
+//                    AttrInfo.add(new byte[]{1});
+//                }
+//                else if (strs[2].equals("string")){
+//                    AttrInfo.add(new byte[]{2});
+//                }
+//                else{
+//                    System.out.println(strs[2]);
+//                    throw new DataFormatException("DataFormat Error! Attributes num is " + attrNum + 1);
+//                }
+//                AttrInfo.add(strs[1].getBytes());
+//                attrNum ++;
+//            }
+//            else{
+//                throw new DataFormatException("DataFormat Error!");
+//            }
+//        }
+//
+//        recordNum = datas.size() - attrNum - 3;
+//
+//        int BasicLocation = 4 * (5 + recordNum + attrNum);
+//        int Offset = BasicLocation;
+//        HeadInfo.add(getBytes(Offset));
+//        Offset += DBName.length;
+//        HeadInfo.add(getBytes(Offset));
+//        Offset += TblName.length;
+//        HeadInfo.add(getBytes(attrNum));
+//        HeadInfo.add(getBytes(recordNum));
+//
+//        HeadInfo.add(getBytes(Offset));
+//        for (int i = 0;i < AttrInfo.size();i += 2){
+//            Offset += AttrInfo.get(i + 1).length + 1;
+//            HeadInfo.add(getBytes(Offset));
+//        }
+//
+//        for (int i = attrNum + 3;i < datas.size();i ++){
+////            System.out.println(datas.get(i));
+//            byte[] tmp = getDataBytes(AttrInfo,datas.get(i));
+//            int len = tmp.length;
+//            BodyInfo.add(tmp);
+//            Offset += len;
+//            HeadInfo.add(getBytes(Offset));
+//        }
+//        HeadInfo.add(DBName);
+//        HeadInfo.add(TblName);
+//        HeadInfo.addAll(AttrInfo);
+//        HeadInfo.addAll(BodyInfo);
+//
+//        storeDataHDFS.storeData(HeadInfo);
+//    }
+//
     private byte[] getDataBytes(ArrayList<byte[]> attrInfo, String s) throws DataFormatException {
         String[] strs = s.split(RecordsUtils.recordSplitLabel);
         ArrayList<Byte> arrayList = new ArrayList<>();
