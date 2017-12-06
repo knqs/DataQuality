@@ -24,7 +24,6 @@ public class StoreRecords implements StoreRecordsInterface {
 
         BufferedReader bufferedReader = new BufferedReader(new FileReader(src));
 
-
         String str;
 
         int attrNum = 0;
@@ -72,6 +71,7 @@ public class StoreRecords implements StoreRecordsInterface {
                     throw new DataFormatException("DataFormat Error! Attributes num is " + attrNum + 1);
                 }
                 AttrInfo.add(strs[1].getBytes());
+                System.out.println(strs[1]);
                 attrNum ++;
             }
             else{
@@ -79,7 +79,7 @@ public class StoreRecords implements StoreRecordsInterface {
             }
         }
 
-        int Offset = (5 + AttrInfo.size()) * 4;
+        int Offset = (6 + AttrInfo.size() / 2) * 4;
         int recordStart = 0;
         HeadInfo.add(getBytes(Offset));
         Offset += DBName.length;
@@ -105,11 +105,11 @@ public class StoreRecords implements StoreRecordsInterface {
             int len = tmp.length;
 
             storeDataHDFS.storeData(tmp);
-
             recordNum ++;
             HeadInfo.add(getBytes(Offset));
             Offset += len;
         }
+        HeadInfo.add(getBytes(Offset));
         HeadInfo.set(3, getBytes(recordStart)); // 真正记录recordStart
         HeadInfo.set(4, getBytes(recordNum)); // 真正记录recordNum
 
@@ -168,12 +168,20 @@ public class StoreRecords implements StoreRecordsInterface {
         byte[] newHeadInfo = new byte[headInfo.length + 4];
         int basicRecords = loadRecords.getBasicRecords();
 
-        headInfo = addN(headInfo,4);
         int totalnum = SLSystem.byteArrayToInt(oldHead, 16) + 1;
         byte[] totalnumByte = SLSystem.intToByteArray(totalnum);
         System.arraycopy(totalnumByte ,0, oldHead, 16, 4); // 这四条语句用来修改总记录数
 
-        byte[] newrecord = getDataBytes(attrInfo, record); // 获取新纪录的byte数组
+        List<byte[]> tmp = new ArrayList<>();
+        for (int i = 0;i < attrInfo.size();i ++){
+            byte[] tmp1 = new byte[1];
+            byte[] tmp2 = new byte[attrInfo.get(i).length - 1];
+            System.arraycopy(attrInfo.get(i), 0, tmp1, 0, 1);
+            System.arraycopy(attrInfo.get(i), 1, tmp2, 0, tmp2.length);
+            tmp.add(tmp1);
+            tmp.add(tmp2);
+        }
+        byte[] newrecord = getDataBytes(tmp, record); // 获取新纪录的byte数组
 
         int lasInd = SLSystem.byteArrayToInt(headInfo,headInfo.length - 4);
         if (totalnum == basicRecords + 1) lasInd = 0;
@@ -186,15 +194,16 @@ public class StoreRecords implements StoreRecordsInterface {
         arrayList.add(oldHead);
         arrayList.add(newHeadInfo);
         // 存储headinfo
-        String dst = SLSystem.getURI(database,table);
+        String dst = SLSystem.getURIHead(database,table);
         StoreDataHDFS storeDataHDFS = new StoreDataHDFS(dst);
         storeDataHDFS.storeData(arrayList);
         storeDataHDFS.close();
         // 存储append information
+
         dst = SLSystem.getURIAppend(database, table);
         StoreDataHDFS storeDataHDFS1 = new StoreDataHDFS(dst);
         storeDataHDFS1.addData(newrecord);
-        storeDataHDFS.close();
+        storeDataHDFS1.close();
 
         return SLSystem.byteArrayToInt(oldHead,16);
     }
@@ -202,12 +211,8 @@ public class StoreRecords implements StoreRecordsInterface {
     private byte[] addN(byte[] oldHead, int num) {
         int[] tmp = SLSystem.byteArrayToIntArray(oldHead);
         for (int i = 0;i < tmp.length;i ++){
-            if (i != 2 && i != 3){
+            if (tmp[i] != 0)
                 tmp[i] += num;
-            }
-            else if (i == 3){
-                tmp[i] += 1;
-            }
         }
         return SLSystem.intArrayToByteArray(tmp);
     }

@@ -21,13 +21,7 @@ public class intToByte {
 //        double nn = SLSystem.byteToDouble(bytes1,0);
 //        System.out.println(nn);
 
-        Set<Integer> set = new HashSet<Integer>();
-        for (int i = 0;i < 10;i ++){
-            set.add(i);
-        }
-        Integer[] res = set.toArray(new Integer[0]);
-        for (int i = 0;i < res.length;i ++){
-            System.out.println(res[i]);
-        }
+        byte[] a = new byte[]{1};
+        System.out.println(a.length);
     }
 }

@@ -64,11 +64,7 @@ public class LoadRecords implements LoadRecordsInterface {
         gainBasicRecords(dataBaseName,tableName);
 
         String uri = SLSystem.getURIHead(dataBaseName, tableName);
-        String basicuri = SLSystem.getURI(dataBaseName, tableName);
-        String appenduri = SLSystem.getURIAppend(dataBaseName, tableName);
         this.loadData = new LoadDataHDFS(uri);
-        this.basicLoadData = new LoadDataHDFS(basicuri);
-        this.appendLoadData = new LoadDataHDFS(appenduri);
         Init(); // 获得所有的头部信息
     }
 
@@ -109,15 +105,14 @@ public class LoadRecords implements LoadRecordsInterface {
 
         byte[] attrLocation = new byte[attrNum * 4];
 
-        DBInfo = new byte[attrSI - DBL];
+//        DBInfo = new byte[attrSI - DBL];
         attrAll = new byte[attrEI - attrSI];
-        headAll = new byte[recordStart - DBL];
+        headAll = new byte[recordStart];
         loadData.read(20, attrLocation,0,attrLocation.length);
         loadData.read(recordStart, HeadInfo,0, HeadInfo.length);
         loadData.read(0, headAll, 0, headAll.length);
-        loadData.read(DBL, DBInfo, 0, DBInfo.length);
-        loadData.read(attrSI, attrAll,0,attrAll.length);
-
+//        loadData.read(DBL, DBInfo, 0, DBInfo.length);
+        loadData.read(attrSI, attrAll, 0, attrAll.length);
         int[] attrL = SLSystem.byteArrayToIntArray(attrLocation);
         int base = attrSI;
 
@@ -168,14 +163,25 @@ public class LoadRecords implements LoadRecordsInterface {
         }
         String uri = null;
         LoadDataInterface loadData = null;
-        if (num < basicRecords) loadData = basicLoadData;
-        else loadData = appendLoadData;
+
+        if (num < basicRecords) {
+            uri = SLSystem.getURI(dataBaseName, tableName);
+        }
+        else uri = SLSystem.getURIAppend(dataBaseName, tableName);
+
+        loadData = new LoadDataHDFS(uri);
 
         int S = SLSystem.byteArrayToInt(HeadInfo,num * 4);
         int E = SLSystem.byteArrayToInt(HeadInfo,num * 4 + 4);
-
-        byte[] res = new byte[E - S];
-        loadData.read(S, res,0,res.length);
+        byte[] res = null;
+        if (E > S){
+            res  = new byte[E - S];
+        }
+        else{
+            res = new byte[E];
+            S = 0;
+        }
+        loadData.read(S, res,0, res.length);
         StringBuffer result = new StringBuffer("");
         int offset = 0;
         for (int i = 0;i < AttrInfo.length;i ++){
@@ -191,9 +197,9 @@ public class LoadRecords implements LoadRecordsInterface {
                     offset += 8;
                     break;
                 case 2:
-                    int len = SLSystem.byteArrayToInt(res,offset);
+                    int len = SLSystem.byteArrayToInt(res, offset);
                     offset += 4;
-                    result.append(new String(Arrays.copyOfRange(res,offset,offset + len)));
+                    result.append(new String(Arrays.copyOfRange(res, offset, offset + len)));
                     result.append(RecordsUtils.recordSplitLabel);
                     offset += len;
                     break;
