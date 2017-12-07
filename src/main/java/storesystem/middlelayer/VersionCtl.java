@@ -28,9 +28,9 @@ public class VersionCtl {
         LoadDataHDFS loadDataHDFS = new LoadDataHDFS(uri);
 
         // 获得头部信息
-        int[] headInfoI = getHeadInfo(loadDataHDFS,uri,versionNum);
+        int[] headInfoI = getHeadInfo(loadDataHDFS, uri, versionNum);
         // 获得父版本信息
-        ArrayList<Integer> vNums = getFaVerionInfo(versionNum,loadDataHDFS,headInfoI);
+        ArrayList<Integer> vNums = getFaVerionInfo(versionNum, loadDataHDFS, headInfoI);
         // 获得所有记录信息
         HashSet<Integer> recordNum = getAllRecordsNum(vNums,loadDataHDFS,headInfoI);
 
@@ -54,15 +54,12 @@ public class VersionCtl {
 
     private HashSet<Integer> getAllRecordsNum(ArrayList<Integer> vNums, LoadDataHDFS loadDataHDFS, int[] headInfoI) throws IOException {
         HashSet<Integer> recordNum = new HashSet<>();
-//        System.out.println("vNums.size() = " + vNums.size());
         for (int i = vNums.size() - 1;i >=0;i --){
             int vTmp = vNums.get(i);
-//            System.out.println("vTmp = " + vTmp);
-            int dataS = headInfoI[vTmp + 1];
-            int dataE = headInfoI[vTmp + 2];
-//            System.out.println("dataS = " + dataS + ",dataE = " + dataE);
+            int dataS = headInfoI[vTmp + 2];
+            int dataE = headInfoI[vTmp + 3];
             byte[] datas = new byte[dataE - dataS];
-            loadDataHDFS.read(dataS,datas,0,datas.length);
+            loadDataHDFS.read(dataS, datas, 0, datas.length);
             ArrayList<HashSet<Integer>> changedInfo = getChanges(datas);
             recordNum.addAll(changedInfo.get(0));
             recordNum.removeAll(changedInfo.get(1));
@@ -75,9 +72,9 @@ public class VersionCtl {
         vNums.add(versionNum);
         while (true){
             int vTmp = vNums.get(vNums.size() - 1);
-            int indTmp = headInfoI[vTmp + 1];
+            int indTmp = headInfoI[vTmp + 2];
             byte[] nextV = new byte[4];
-            loadDataHDFS.read(indTmp + 4,nextV,0,nextV.length);
+            loadDataHDFS.read(indTmp + 4, nextV, 0, nextV.length);
             int nextVI = SLSystem.byteArrayToInt(nextV,0);
             if (nextVI == vTmp){
                 break;
@@ -89,14 +86,16 @@ public class VersionCtl {
 
     private int[] getHeadInfo(LoadDataHDFS loadDataHDFS, String uri, int versionNum) throws IOException, DataFormatException {
         byte[] VerNum = new byte[4];
-        loadDataHDFS.read(0,VerNum,0,4);
+        loadDataHDFS.read(0, VerNum, 0, 4);
         int VerNumI = SLSystem.byteArrayToInt(VerNum,0);
+//        System.out.println(versionNum);
+//        System.out.println(VerNumI);
         if (versionNum >= VerNumI){
             throw new DataFormatException("versionNum not exits!");
         }
 
         // 获得版本信息地址
-        byte[] headInfo = new byte[VerNumI * 4 + 8];
+        byte[] headInfo = new byte[VerNumI * 4 + 12];
         loadDataHDFS.read(0,headInfo,0,headInfo.length);
         return SLSystem.byteArrayToIntArray(headInfo);
     }
@@ -105,7 +104,6 @@ public class VersionCtl {
         int[] datasI = SLSystem.byteArrayToIntArray(datas);
         int addedV = datasI[2];
         int removedV = datasI[3];
-        int changedV = datas[4];
 //        System.out.println(addedV + " " + removedV + " " + changedV);
         HashSet<Integer> addedHash = new HashSet<>();
         HashSet<Integer> removedHash = new HashSet<>();
@@ -119,6 +117,7 @@ public class VersionCtl {
             addedHash.add(datasI[i]);
             removedHash.add(datasI[i + 1]);
         }
+
         ArrayList<HashSet<Integer>> result = new ArrayList<>();
         result.add(addedHash);
         result.add(removedHash);
@@ -136,6 +135,11 @@ public class VersionCtl {
      */
     public boolean initVersion(String database, String table, int num) throws IOException, DataFormatException {
         String uri = SLSystem.getURIVersion(database,table);
+
+        // 初始化时删除之前可能存在的Append文件。
+        String uri1 = SLSystem.getURIAppend(database, table);
+        StoreDataHDFS storeDataHDFS = new StoreDataHDFS(uri1);
+        storeDataHDFS.clean();
 //        FileSystem fileSystem = FileSystem.get(URI.create(uri), new Configuration());
 //
 //        if (fileSystem.exists(new Path(uri))){
@@ -143,10 +147,11 @@ public class VersionCtl {
 //        }
 
         int VersionNum = 1;
-        int V1Location = 12;
+        int V1Location = 16; // 初始头长为4 * 4 bytes.
 
         ArrayList<byte[]> arrayList = new ArrayList<>();
         arrayList.add(SLSystem.intToByteArray(VersionNum));
+        arrayList.add(SLSystem.intToByteArray(num)); //原始文件记录数
         arrayList.add(SLSystem.intToByteArray(V1Location)); // 增加版本文件头信息
 
         int V1 = 0;
@@ -165,10 +170,11 @@ public class VersionCtl {
         }
 
         int V2Location = V1Location + 20 + addedRecord * 4;
-        arrayList.add(2,SLSystem.intToByteArray(V2Location));
+        arrayList.add(3, SLSystem.intToByteArray(V2Location));
 
-        StoreDataHDFS storeDataHDFS = new StoreDataHDFS(uri);
+        storeDataHDFS = new StoreDataHDFS(uri);
         storeDataHDFS.storeData(arrayList);
+        storeDataHDFS.close();
         return true;
     }
 
@@ -189,13 +195,12 @@ public class VersionCtl {
         ArrayList<byte[]> newRecord = new ArrayList<>();
 
         byte[] num = new byte[4];
-        loadDataHDFS.read(0,num,0,4);
-        int VersionNum = SLSystem.byteArrayToInt(num,0);
-        byte[] oldHead = new byte[VersionNum * 4 + 8];
-        loadDataHDFS.read(0,oldHead,0,oldHead.length);
+        loadDataHDFS.read(0, num, 0, 4);
+        int VersionNum = SLSystem.byteArrayToInt(num, 0);
+        byte[] oldHead = new byte[VersionNum * 4 + 12];
+        loadDataHDFS.read(0, oldHead, 0, oldHead.length);
 
-        byte[] tmp = getVersionBody(loadDataHDFS,0, VersionNum);
-
+        byte[] tmp = getVersionBody(loadDataHDFS, 0, VersionNum);
         int newVersion = VersionNum;
         int addedNum = 0;
         int removedNum = 0;
@@ -207,16 +212,19 @@ public class VersionCtl {
         newRecord.add(SLSystem.intToByteArray(replacedNum));
 
         byte[] endL = new byte[4]; //存储版本记录的结束位置
-        loadDataHDFS.read(VersionNum * 4 + 4,endL,0,4);
+        loadDataHDFS.read(VersionNum * 4 + 8,endL,0,4);
         int endLI = SLSystem.byteArrayToInt(endL,0);
         byte[] newL = SLSystem.intToByteArray(endLI + 24);
 
-//        System.out.println("oldHead = " + SLSystem.byteArrayToInt(oldHead,0));
-        oldHead = addN(oldHead,4);
-//        System.out.println("oldHead = " + SLSystem.byteArrayToInt(oldHead,0));
+        oldHead = addN(oldHead, 4);
+//        System.out.println(SLSystem.byteArrayToInt(oldHead, 0));
         byte[] newHead = new byte[oldHead.length + 4];
-        System.arraycopy(oldHead,0,newHead,0,oldHead.length);
-        System.arraycopy(newL,0,newHead,oldHead.length,newL.length);
+        System.arraycopy(oldHead, 0, newHead, 0, oldHead.length);
+        System.arraycopy(newL,0, newHead, oldHead.length, newL.length);
+
+        // 对头部多加的数目进行修改，包括原始记录数
+//        int totalRecord = SLSystem.byteArrayToInt(newHead, 4) - 4;
+//        System.arraycopy(SLSystem.intToByteArray(totalRecord), 0, newHead, 4, 4);
 
         ArrayList<byte[]> result = new ArrayList<>();
         result.add(newHead);
@@ -226,14 +234,15 @@ public class VersionCtl {
 
         StoreDataHDFS storeDataHDFS = new StoreDataHDFS(uri);
         storeDataHDFS.storeData(result);
+        storeDataHDFS.close();
         return true;
     }
 
     private byte[] getVersionBody(LoadDataHDFS loadDataHDFS, int StartVerNum,int EndVerNum) throws IOException {
         byte[] startL = new byte[4]; //存储版本记录的开始位置
         byte[] endL = new byte[4]; //存储版本记录的结束位置
-        loadDataHDFS.read(4 + StartVerNum * 4,startL,0,4);
-        loadDataHDFS.read(EndVerNum * 4 + 4,endL,0,4);
+        loadDataHDFS.read(8 + StartVerNum * 4,startL,0,4);
+        loadDataHDFS.read(EndVerNum * 4 + 8,endL,0,4);
         int startLI = SLSystem.byteArrayToInt(startL,0);
         int endLI = SLSystem.byteArrayToInt(endL,0);
         byte[] tmp = new byte[endLI - startLI];
@@ -244,7 +253,7 @@ public class VersionCtl {
     private byte[] addN(byte[] oldHead,int num) {
         int[] tmp = SLSystem.byteArrayToIntArray(oldHead);
         for (int i = 0;i < tmp.length;i ++){
-            if (i != 0){
+            if (i != 0 && i != 1){
                 tmp[i] += num;
             }
             else if (i == 0){
@@ -267,29 +276,27 @@ public class VersionCtl {
     public boolean addRecord(int versionNum, String record, String database, String table) throws IOException, DataFormatException {
         String uri = SLSystem.getURIVersion(database,table);
         LoadDataHDFS loadDataHDFS = new LoadDataHDFS(uri);
-        int[] headInfoI = getHeadInfo(loadDataHDFS,uri,versionNum);
+        int[] headInfoI = getHeadInfo(loadDataHDFS, uri, versionNum);
 
         StoreRecords storeRecords = new StoreRecords();
-        int totalnum = storeRecords.appendRecords(record,database,table);
+
+        int totalnum = storeRecords.appendRecords(record, database, table); // 是否需要修改storeRecords 里面的内容。
 
         int totalV = headInfoI[0];
         // 获得不同版本记录的信息
-        byte[] pre = getVersionBody(loadDataHDFS,0,versionNum);
-        byte[] oldV = getVersionBody(loadDataHDFS,versionNum, versionNum + 1);
-//        System.out.println(versionNum + " " + totalV);
-        byte[] las = getVersionBody(loadDataHDFS,versionNum + 1,totalV);
+        byte[] pre = getVersionBody(loadDataHDFS, 0, versionNum);
+        byte[] oldV = getVersionBody(loadDataHDFS, versionNum, versionNum + 1);
+        byte[] las = getVersionBody(loadDataHDFS, versionNum + 1, totalV);
 
         int[] oldVI = SLSystem.byteArrayToIntArray(oldV);
         oldVI[2] ++; // 增加的记录数加一
-//        System.out.println("oldVI[2] = " + oldVI[2]);
         int[] newVI = new int[oldVI.length + 1];
-//        System.out.println("newvI.length = " + newVI.length);
         System.arraycopy(oldVI,0,newVI,0,oldVI[2] + 4);
         System.arraycopy(oldVI,oldVI[2] + 4,newVI,oldVI[2] + 5,oldVI.length - 4 - oldVI[2]);
         newVI[oldVI[2] + 4] = totalnum;
         byte[] newV = SLSystem.intArrayToByteArray(newVI);
 
-        for (int i = versionNum + 2;i < headInfoI.length;i ++){
+        for (int i = versionNum + 3;i < headInfoI.length;i ++){
             headInfoI[i] += 4;
         }
         byte[] headInfo = SLSystem.intArrayToByteArray(headInfoI);
@@ -301,7 +308,7 @@ public class VersionCtl {
         V.add(newV);
         V.add(las);
         storeDataHDFS.storeData(V);
-
+        storeDataHDFS.close();
         return true;
     }
 
@@ -323,22 +330,19 @@ public class VersionCtl {
         int totalV = headInfoI[0];
         byte[] pre = getVersionBody(loadDataHDFS,0,versionNum);
         byte[] oldV = getVersionBody(loadDataHDFS,versionNum, versionNum + 1);
-//        System.out.println(versionNum + " " + totalV);
         byte[] las = getVersionBody(loadDataHDFS,versionNum + 1,totalV);
 
         int[] oldVI = SLSystem.byteArrayToIntArray(oldV);
         oldVI[3] ++;
         int off = oldVI[2] + oldVI[3] + 4;
 
-//        System.out.println("oldVI[2] = " + oldVI[2]);
         int[] newVI = new int[oldVI.length + 1];
-//        System.out.println("newvI.length = " + newVI.length);
-        System.arraycopy(oldVI,0,newVI,0,off);
-        System.arraycopy(oldVI,off,newVI,off + 1,oldVI.length - off);
+        System.arraycopy(oldVI, 0, newVI, 0, off);
+        System.arraycopy(oldVI, off, newVI, off + 1, oldVI.length - off);
         newVI[off] = num;
         byte[] newV = SLSystem.intArrayToByteArray(newVI);
 
-        for (int i = versionNum + 2;i < headInfoI.length;i ++){
+        for (int i = versionNum + 3;i < headInfoI.length;i ++){
             headInfoI[i] += 4;
         }
         byte[] headInfo = SLSystem.intArrayToByteArray(headInfoI);
@@ -350,6 +354,7 @@ public class VersionCtl {
         V.add(newV);
         V.add(las);
         storeDataHDFS.storeData(V);
+        storeDataHDFS.close();
         return true;
     }
 
@@ -367,7 +372,7 @@ public class VersionCtl {
     public boolean replaceRecord(int versionNum, int oldnum, String newRecord, String database, String table) throws IOException, DataFormatException {
         String uri = SLSystem.getURIVersion(database,table);
         LoadDataHDFS loadDataHDFS = new LoadDataHDFS(uri);
-        int[] headInfoI = getHeadInfo(loadDataHDFS,uri,versionNum);
+        int[] headInfoI = getHeadInfo(loadDataHDFS, uri, versionNum);
 
         StoreRecords storeRecords = new StoreRecords();
         int totalnum = storeRecords.appendRecords(newRecord,database,table);
@@ -375,20 +380,18 @@ public class VersionCtl {
         int totalV = headInfoI[0];
         byte[] pre = getVersionBody(loadDataHDFS,0,versionNum);
         byte[] oldV = getVersionBody(loadDataHDFS,versionNum, versionNum + 1);
-//        System.out.println(versionNum + " " + totalV);
         byte[] las = getVersionBody(loadDataHDFS,versionNum + 1,totalV);
 
         int[] oldVI = SLSystem.byteArrayToIntArray(oldV);
         oldVI[4] ++;
-        System.out.println("oldVI[4] = " + oldVI[4]);
+//        System.out.println("oldVI[4] = " + oldVI[4]);
         int[] newVI = new int[oldVI.length + 2];
-//        System.out.println("newvI.length = " + newVI.length);
         System.arraycopy(oldVI,0,newVI,0,oldVI.length);
         newVI[oldVI.length] = totalnum;
         newVI[oldVI.length + 1] = oldnum;
         byte[] newV = SLSystem.intArrayToByteArray(newVI);
 
-        for (int i = versionNum + 2;i < headInfoI.length;i ++){
+        for (int i = versionNum + 3;i < headInfoI.length;i ++){
             headInfoI[i] += 8;
         }
         byte[] headInfo = SLSystem.intArrayToByteArray(headInfoI);
@@ -400,6 +403,7 @@ public class VersionCtl {
         V.add(newV);
         V.add(las);
         storeDataHDFS.storeData(V);
+        storeDataHDFS.close();
         return true;
     }
 
@@ -418,11 +422,11 @@ public class VersionCtl {
         LoadDataHDFS loadDataHDFS = new LoadDataHDFS(uri);
         int[] headInfoI = getHeadInfo(loadDataHDFS,uri,V1 > V2 ? V1 : V2);
 
-        ArrayList<Integer> FV1 = getFaVerionInfo(V1,loadDataHDFS,headInfoI);
-        ArrayList<Integer> FV2 = getFaVerionInfo(V2,loadDataHDFS,headInfoI);
+        ArrayList<Integer> FV1 = getFaVerionInfo(V1, loadDataHDFS, headInfoI);
+        ArrayList<Integer> FV2 = getFaVerionInfo(V2, loadDataHDFS, headInfoI);
 
-        HashSet<Integer> recordNum1 = getAllRecordsNum(FV1,loadDataHDFS,headInfoI);
-        HashSet<Integer> recordNum2 = getAllRecordsNum(FV2,loadDataHDFS,headInfoI);
+        HashSet<Integer> recordNum1 = getAllRecordsNum(FV1, loadDataHDFS, headInfoI);
+        HashSet<Integer> recordNum2 = getAllRecordsNum(FV2, loadDataHDFS, headInfoI);
 
         int comFa = getCommonFather(FV1,FV2);
 
@@ -452,18 +456,18 @@ public class VersionCtl {
     }
 
     private int createNewVersionV2(int v1, ArrayList<Object> sum, String database, String table) throws IOException, DataFormatException {
-        String uri = SLSystem.getURIVersion(database,table);
+        String uri = SLSystem.getURIVersion(database, table);
         LoadDataHDFS loadDataHDFS = new LoadDataHDFS(uri);
 
         ArrayList<byte[]> newRecord = new ArrayList<>();
 
         byte[] num = new byte[4];
-        loadDataHDFS.read(0,num,0,4);
-        int VersionNum = SLSystem.byteArrayToInt(num,0);
-        byte[] oldHead = new byte[VersionNum * 4 + 8];
-        loadDataHDFS.read(0,oldHead,0,oldHead.length);
+        loadDataHDFS.read(0, num, 0, 4);
+        int VersionNum = SLSystem.byteArrayToInt(num, 0);
+        byte[] oldHead = new byte[VersionNum * 4 + 12];
+        loadDataHDFS.read(0, oldHead, 0, oldHead.length);
 
-        byte[] tmp = getVersionBody(loadDataHDFS,0, VersionNum);
+        byte[] tmp = getVersionBody(loadDataHDFS, 0, VersionNum);
 
         Set<Integer> addedData = (Set<Integer>) sum.get(0);
         Set<Integer> removedData = (Set<Integer>) sum.get(1);
@@ -506,16 +510,14 @@ public class VersionCtl {
             }
         }
         byte[] endL = new byte[4]; //存储版本记录的结束位置
-        loadDataHDFS.read(VersionNum * 4 + 4,endL,0,4);
+        loadDataHDFS.read(VersionNum * 4 + 8, endL, 0, 4);
         int endLI = SLSystem.byteArrayToInt(endL,0);
         byte[] newL = SLSystem.intToByteArray(endLI + newRecord.size() * 4 + 4);
 
-//        System.out.println("oldHead = " + SLSystem.byteArrayToInt(oldHead,0));
-        oldHead = addN(oldHead,4);
-//        System.out.println("oldHead = " + SLSystem.byteArrayToInt(oldHead,0));
+        oldHead = addN(oldHead, 4);
         byte[] newHead = new byte[oldHead.length + 4];
-        System.arraycopy(oldHead,0,newHead,0,oldHead.length);
-        System.arraycopy(newL,0,newHead,oldHead.length,newL.length);
+        System.arraycopy(oldHead, 0, newHead, 0, oldHead.length);
+        System.arraycopy(newL, 0, newHead, oldHead.length, newL.length);
 
         ArrayList<byte[]> result = new ArrayList<>();
         result.add(newHead);
@@ -525,6 +527,7 @@ public class VersionCtl {
 
         StoreDataHDFS storeDataHDFS = new StoreDataHDFS(uri);
         storeDataHDFS.storeData(result);
+        storeDataHDFS.close();
         return newVersion;
     }
 
@@ -562,11 +565,11 @@ public class VersionCtl {
                 continue;
             }
 //            System.out.println("vTmp = " + vTmp);
-            int dataS = headInfoI[vTmp + 1];
-            int dataE = headInfoI[vTmp + 2];
+            int dataS = headInfoI[vTmp + 2];
+            int dataE = headInfoI[vTmp + 3];
 //            System.out.println("dataS = " + dataS + ",dataE = " + dataE);
             byte[] datas = new byte[dataE - dataS];
-            loadDataHDFS.read(dataS,datas,0,datas.length);
+            loadDataHDFS.read(dataS, datas,0,datas.length);
             ArrayList<HashMap<Integer,Integer>> changedInfo = getChangesV2(datas);
             added.putAll(changedInfo.get(0));
             removed.putAll(changedInfo.get(1));
@@ -588,10 +591,10 @@ public class VersionCtl {
         HashMap<Integer,Integer> removedHash = new HashMap<>();
         HashMap<Integer,Integer> replacedHash = new HashMap<>();
         for (int i = 5;i < 5 + addedV;i ++){
-            addedHash.put(datasI[i],datasI[i]);
+            addedHash.put(datasI[i], datasI[i]);
         }
         for (int i = 5 + addedV;i < 5 + addedV + removedV;i ++){
-            removedHash.put(datasI[i],datasI[i]);
+            removedHash.put(datasI[i], datasI[i]);
         }
         for (int i = 5 + addedV + removedV;i < datasI.length;i += 2){
             replacedHash.put(datasI[i],datasI[i + 1]);

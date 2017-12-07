@@ -17,6 +17,7 @@ import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Scanner;
 
 public class StoreDataHDFS implements StoreDataInterface {
 
@@ -24,20 +25,9 @@ public class StoreDataHDFS implements StoreDataInterface {
     private FileSystem fileSystem;
     private FSDataOutputStream fsDataOutputStream;
 
-    public StoreDataHDFS(String uri){
+    public StoreDataHDFS(String uri) throws IOException {
         this.uri = uri;
-        try {
-            fileSystem = FileSystem.get(URI.create(this.uri), new Configuration());
-            fsDataOutputStream = fileSystem.create(new Path(uri), new Progressable() {
-                @Override
-                public void progress() {
-                    System.out.print(".");
-                }
-            });
-        } catch (IOException e) {
-            System.err.print("Error at StoreDataHDFS...");
-            e.printStackTrace();
-        }
+        fileSystem = FileSystem.get(URI.create(this.uri), new Configuration());
     }
 
     /**
@@ -50,6 +40,7 @@ public class StoreDataHDFS implements StoreDataInterface {
      * @throws DataFormatException
      */
     public boolean storeData(List<byte[]> datas) throws IOException, DataFormatException {
+        checkExist();
         datas.forEach(data -> {
             try {
                 fsDataOutputStream.write(data);
@@ -64,41 +55,65 @@ public class StoreDataHDFS implements StoreDataInterface {
     }
 
     public boolean storeData(byte[] data) throws IOException, DataFormatException {
+        checkExist();
         fsDataOutputStream.write(data);
         fsDataOutputStream.flush();
         return true;
     }
 
+    private void checkExist() {
+        if (fsDataOutputStream == null || fileSystem == null){
+            try {
+                fsDataOutputStream = fileSystem.create(new Path(uri), new Progressable() {
+                    @Override
+                    public void progress() {
+                        System.out.print(".");
+                    }
+                });
+            } catch (IOException e) {
+                System.err.print("Error at StoreDataHDFS...");
+                e.printStackTrace();
+            }
+        }
+    }
+
     public boolean close() throws IOException {
-        fsDataOutputStream.close();
+        if (fsDataOutputStream != null)
+            fsDataOutputStream.close();
         return true;
     }
 
     @Override
     public boolean addData(byte[] data) throws IOException {
-        return false;
+        FSDataInputStream fsDataInputStream = fileSystem.open(new Path(uri));
+        List<byte[]> list = new ArrayList<>();
+        byte[] tmp = new byte[1024];
+        int len = 0;
+        while ((len = fsDataInputStream.read(tmp)) != -1){
+            if (len == tmp.length)
+                list.add(tmp);
+            else{
+                byte[] tmp1 = new byte[len];
+                System.arraycopy(tmp, 0, tmp1, 0, tmp1.length);
+                list.add(tmp1);
+            }
+        }
+        list.add(data);
+        fsDataInputStream.close();
+        FSDataOutputStream fsO = fileSystem.create(new Path(uri));
+        list.forEach(datas -> {
+            try {
+                fsO.write(datas);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        });
+        fsO.close();
+        return true;
     }
 
-    /**
-     * 暂时未用
-     * @param data
-     * @return
-     * @throws IOException
-     */
-    public boolean addData(String data) throws IOException {
-        FSDataInputStream fsDataInputStream = fileSystem.open(new Path(uri));
-        String str;
-        String tmp = "";
-        while((str = fsDataInputStream.readLine()) != null){
-            tmp += str + "\r\n";
-        }
-        fsDataInputStream.close();
-
-        fsDataOutputStream.writeBytes(tmp);
-        fsDataOutputStream.writeBytes(data);
-        fsDataOutputStream.flush();
-
-        System.out.println();
-        return true;
+    public void clean() throws IOException {
+        fileSystem.delete(new Path(uri), false);
+        fileSystem.create(new Path(uri)).close();
     }
 }
