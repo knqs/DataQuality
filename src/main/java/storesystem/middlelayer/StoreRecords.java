@@ -75,6 +75,7 @@ public class StoreRecords implements StoreRecordsInterface {
                 attrNum ++;
             }
             else{
+                System.out.println(strs[0]);
                 throw new DataFormatException("DataFormat Error!");
             }
         }
@@ -98,8 +99,11 @@ public class StoreRecords implements StoreRecordsInterface {
 
         recordStart = Offset;
         Offset = 0;
+        int totalnum = 0;
         while ((str = bufferedReader.readLine()) != null){
+            totalnum ++;
             byte[] tmp = getDataBytes(AttrInfo, str);
+            if (tmp == null) continue;
             int len = tmp.length;
 
             storeDataHDFS.storeData(tmp);
@@ -110,7 +114,7 @@ public class StoreRecords implements StoreRecordsInterface {
         }
         HeadInfo.set(3, getBytes(recordStart)); // 真正记录recordStart
         HeadInfo.set(4, getBytes(recordNum)); // 真正记录recordNum
-
+        System.out.println(recordNum + "/" + totalnum + " = " + recordNum/totalnum);
         storeDataHDFSHead.storeData(HeadInfo);
 
         storeDataHDFSHead.close();
@@ -118,7 +122,7 @@ public class StoreRecords implements StoreRecordsInterface {
         return true;
     }
 
-//    private void storeData(StoreDataHDFS storeDataHDFS, ArrayList<String> datas) throws DataFormatException, IOException {
+    private void storeData(StoreDataHDFS storeDataHDFS, ArrayList<String> datas) throws DataFormatException, IOException {
 //        int attrNum = 0;
 //        int recordNum = 0;
 //        byte[] DBName = datas.get(0).getBytes();
@@ -188,15 +192,20 @@ public class StoreRecords implements StoreRecordsInterface {
 //        HeadInfo.addAll(BodyInfo);
 //
 //        storeDataHDFS.storeData(HeadInfo);
-//    }
+    }
 //
     private byte[] getDataBytes(ArrayList<byte[]> attrInfo, String s) throws DataFormatException {
         String[] strs = s.split(RecordsUtils.recordSplitLabel);
         ArrayList<Byte> arrayList = new ArrayList<>();
+        if (strs.length >= attrInfo.size() / 2) return null;
         for (int i = 0;i < strs.length;i ++){
             switch (attrInfo.get(i * 2)[0]){
                 case 0:
-                    arrayList.addAll(arrToCol(getBytes(Integer.valueOf(strs[i]))));
+                    try {
+                        arrayList.addAll(arrToCol(getBytes(Integer.valueOf(strs[i]))));
+                    } catch (NumberFormatException e){
+                        continue;
+                    }
                     break;
                 case 1:
                     arrayList.addAll(arrToCol(getBytes(Double.valueOf(strs[i]))));
