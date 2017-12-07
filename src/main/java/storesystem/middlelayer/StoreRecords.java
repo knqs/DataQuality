@@ -199,7 +199,7 @@ public class StoreRecords implements StoreRecordsInterface {
     private byte[] getDataBytes(List<byte[]> attrInfo, String s) throws DataFormatException {
         String[] strs = s.split(RecordsUtils.recordSplitLabel);
         ArrayList<Byte> arrayList = new ArrayList<>();
-        if (strs.length >= attrInfo.size() / 2) return null;
+        if (strs.length > attrInfo.size() / 2) return null;
         for (int i = 0;i < strs.length;i ++){
             switch (attrInfo.get(i * 2)[0]){
                 case 0:
