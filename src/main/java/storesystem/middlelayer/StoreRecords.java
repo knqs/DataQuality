@@ -1,5 +1,6 @@
 package storesystem.middlelayer;
 
+import Utils.Constants;
 import Utils.DataFormatException;
 import Utils.RecordsUtils;
 import Utils.SLSystem;
@@ -16,8 +17,6 @@ public class StoreRecords implements StoreRecordsInterface {
 
     @Override
     public boolean storeRecords(String src, String database, String table) throws IOException, DataFormatException {
-        String dst = SLSystem.getURI(database,table);
-        StoreDataHDFS storeDataHDFS = new StoreDataHDFS(dst);
 
         String dstHead = SLSystem.getURIHead(database, table);
         StoreDataHDFS storeDataHDFSHead = new StoreDataHDFS(dstHead);
@@ -54,7 +53,7 @@ public class StoreRecords implements StoreRecordsInterface {
             }
             else if (strs[0].equals("@attributes")){
                 if (strs.length != 3){
-                    System.out.println(strs.length);
+//                    System.out.println(strs.length);
                     throw new DataFormatException("DataFormat Error! Attributes num is " + attrNum + 1);
                 }
                 if (strs[2].equals("int")){
@@ -67,15 +66,15 @@ public class StoreRecords implements StoreRecordsInterface {
                     AttrInfo.add(new byte[]{2});
                 }
                 else{
-                    System.out.println(strs[2]);
+//                    System.out.println(strs[2]);
                     throw new DataFormatException("DataFormat Error! Attributes num is " + attrNum + 1);
                 }
                 AttrInfo.add(strs[1].getBytes());
-                System.out.println(strs[1]);
+//                System.out.println(strs[1]);
                 attrNum ++;
             }
             else{
-                System.out.println(strs[0]);
+//                System.out.println(strs[0]);
                 throw new DataFormatException("DataFormat Error!");
             }
         }
@@ -101,22 +100,25 @@ public class StoreRecords implements StoreRecordsInterface {
 
         recordStart = Offset;
         Offset = 0;
-        int totalnum = 0;
+        String dst = SLSystem.getURI(database,table);
+        StoreDataHDFS storeDataHDFS = new StoreDataHDFS(dst);
         while ((str = bufferedReader.readLine()) != null){
-            totalnum ++;
+            if (recordNum % Constants.SUBFILESIZE == 0){
+                storeDataHDFS.close();
+                storeDataHDFS = new StoreDataHDFS(dst + recordNum / Constants.SUBFILESIZE);
+                Offset = 0;
+            }
             byte[] tmp = getDataBytes(AttrInfo, str);
             if (tmp == null) continue;
             int len = tmp.length;
 
             storeDataHDFS.storeData(tmp);
             recordNum ++;
-            HeadInfo.add(getBytes(Offset));
             Offset += len;
+            HeadInfo.add(getBytes(Offset));
         }
-        HeadInfo.add(getBytes(Offset));
         HeadInfo.set(3, getBytes(recordStart)); // 真正记录recordStart
         HeadInfo.set(4, getBytes(recordNum)); // 真正记录recordNum
-        System.out.println(recordNum + "/" + totalnum + " = " + recordNum/totalnum);
         storeDataHDFSHead.storeData(HeadInfo);
 
         storeDataHDFSHead.close();
@@ -199,7 +201,7 @@ public class StoreRecords implements StoreRecordsInterface {
     private byte[] getDataBytes(List<byte[]> attrInfo, String s) throws DataFormatException {
         String[] strs = s.split(RecordsUtils.recordSplitLabel);
         ArrayList<Byte> arrayList = new ArrayList<>();
-        if (strs.length >= attrInfo.size() / 2) return null;
+        if (strs.length > attrInfo.size() / 2) return null;
         for (int i = 0;i < strs.length;i ++){
             switch (attrInfo.get(i * 2)[0]){
                 case 0:

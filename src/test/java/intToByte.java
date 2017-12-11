@@ -1,5 +1,8 @@
 import Utils.SLSystem;
+import org.apache.hadoop.fs.PositionedReadable;
 
+import java.io.DataInputStream;
+import java.io.InputStream;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -20,7 +23,7 @@ public class intToByte {
 //        }
 //        double nn = SLSystem.byteToDouble(bytes1,0);
 //        System.out.println(nn);
-
+        String tmp;
         byte[] a = new byte[]{1};
         System.out.println(a.length);
     }

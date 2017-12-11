@@ -1,5 +1,6 @@
 package storesystem.middlelayer;
 
+import Utils.Constants;
 import Utils.DataFormatException;
 import Utils.RecordsUtils;
 import Utils.SLSystem;
@@ -93,7 +94,7 @@ public class LoadRecords implements LoadRecordsInterface {
         int attrNum = SLSystem.byteArrayToInt(attrNumT,0);
         int DBL = SLSystem.byteArrayToInt(DBl,0);
 
-        HeadInfo = new byte[recordNum * 4 + 4];
+        HeadInfo = new byte[recordNum * 4];
         AttrInfo = new byte[attrNum];
 
         byte[] attrS = new byte[4];
@@ -158,7 +159,7 @@ public class LoadRecords implements LoadRecordsInterface {
     @Override
     public String getNRecord(int num) throws IOException, DataFormatException {
         num --;
-        if (num * 4 + 4 >= HeadInfo.length){
+        if (num * 4 >= HeadInfo.length){
             return null;
         }
         String uri = null;
@@ -166,13 +167,21 @@ public class LoadRecords implements LoadRecordsInterface {
 
         if (num < basicRecords) {
             uri = SLSystem.getURI(dataBaseName, tableName);
+            int ind = (int) (num / Constants.SUBFILESIZE);
+            uri = uri + ind;
         }
         else uri = SLSystem.getURIAppend(dataBaseName, tableName);
 
         loadData = new LoadDataHDFS(uri);
 
-        int S = SLSystem.byteArrayToInt(HeadInfo,num * 4);
-        int E = SLSystem.byteArrayToInt(HeadInfo,num * 4 + 4);
+        int S ,E;
+        if (num == 0) {
+            S = 0;
+            E = SLSystem.byteArrayToInt(HeadInfo, num * 4);
+        } else {
+            S = SLSystem.byteArrayToInt(HeadInfo,num * 4 - 4);
+            E = SLSystem.byteArrayToInt(HeadInfo,num * 4);
+        }
         byte[] res = null;
         if (E > S){
             res  = new byte[E - S];

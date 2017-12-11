@@ -31,8 +31,8 @@ public class StoreDataHDFS implements StoreDataInterface {
     }
 
     /**
-     * 数据库名	表名	属性数目	记录数目	属性1名和取值类型	属性2名和取值类型	属性3名和取值类型	…	记录1	记录2
-     Location1	Location2	Num1	Num2	Location3	Location4	Location5	...	 Location6	Location7
+     * 数据库名	表名	属性数目	记录开始地址  记录数目	属性1名和取值类型	属性2名和取值类型	属性3名和取值类型	…	记录1	记录2
+     Location1	Location2	Num1	Num2    Num3	Location3	Location4	Location5	...	 Location6	Location7
 
      * @param datas
      * @return
@@ -116,4 +116,5 @@ public class StoreDataHDFS implements StoreDataInterface {
         fileSystem.delete(new Path(uri), false);
         fileSystem.create(new Path(uri)).close();
     }
+
 }
