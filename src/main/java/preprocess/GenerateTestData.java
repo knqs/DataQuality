@@ -5,13 +5,31 @@ import java.util.Random;
 
 public class GenerateTestData {
     String filename = "/home/kongning/文档/数据质量/testdata.txt";
-    String[] attrName = new String[]{"id_type", "freq", "value", "name", "id", "time"};
-    String[] attrType = new String[]{"int", "int", "string", "string", "string", "int"};
-    int[] attrTypeCode = new int[]{0,0,2,2,2,0};
+    String[] attrName = null;
+    String[] attrType = null;
+    int[] attrTypeCode = null;
     int recordNum = 1000 * 10000;
 
-    public GenerateTestData(){
-
+    public GenerateTestData(int intnum, int doublenum, int stringnum){
+        int totalnum = intnum + doublenum + stringnum;
+        attrName = new String[totalnum];
+        attrType = new String[totalnum];
+        attrTypeCode = new int[totalnum];
+        for (int i = 0;i < intnum;i ++){
+            attrName[i] = "int" + i;
+            attrType[i] = "int";
+            attrTypeCode[i] = 0;
+        }
+        for (int i = intnum;i < intnum + doublenum;i ++){
+            attrName[i] = "double" + i;
+            attrType[i] = "double";
+            attrTypeCode[i] = 1;
+        }
+        for (int i = intnum + doublenum;i < totalnum;i ++){
+            attrName[i] = "string" + i;
+            attrType[i] = "string";
+            attrTypeCode[i] = 2;
+        }
     }
 
     public void gainData(String filename) throws IOException {

@@ -109,6 +109,7 @@ public class StoreRecords implements StoreRecordsInterface {
             int len = tmp.length;
 
             storeDataHDFS.storeData(tmp);
+
             recordNum ++;
             HeadInfo.add(getBytes(Offset));
             Offset += len;
@@ -119,6 +120,7 @@ public class StoreRecords implements StoreRecordsInterface {
         System.out.println(recordNum + "/" + totalnum + " = " + recordNum/totalnum);
         storeDataHDFSHead.storeData(HeadInfo);
 
+        HeadInfo.clear();
         storeDataHDFSHead.close();
         storeDataHDFS.close();
         return true;
