@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class SLSystem {
+
     // 根据数据库和表名获得文件地址
     public static String getURI(String databaseName, String tableName){
         return "hdfs://localhost:9000/database_" + databaseName + '/' + tableName;
@@ -31,7 +32,7 @@ public class SLSystem {
 
     // 字节数组转int
     public static int byteArrayToInt(byte[] b, int offset) {
-        int value= 0;
+        int value = 0;
         for (int i = 0; i < 4; i++) {
             int shift= (4 - 1 - i) * 8;
             value +=(b[i + offset] & 0x000000FF) << shift;
