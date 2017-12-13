@@ -19,24 +19,24 @@ public class TestVersion {
             System.out.println(1);
             versionCtl.createNewVersion(0,"KNQ","KNQtable");
             System.out.println(1);
-//            versionCtl.createNewVersion(1,"KNQ","KNQtable");
+            versionCtl.createNewVersion(1,"KNQ","KNQtable");
+            versionCtl.addRecord(0,"5 \"No.5\" 5.0 null","KNQ","KNQtable");
+            System.out.println(1);
             versionCtl.addRecord(0,"6 \"No.6\" 6.0 null","KNQ","KNQtable");
-//            System.out.println(1);
-            versionCtl.addRecord(0,"7 \"No.7\" 7.0 null","KNQ","KNQtable");
             System.out.println(1);
             versionCtl.removeRecord(1,1,"KNQ","KNQtable");
             System.out.println(1);
-            versionCtl.replaceRecord(1,3,"5 \"No.5\" 5.0 null","KNQ","KNQtable");
+            versionCtl.replaceRecord(1,3,"7 \"No.7\" 7.0 null","KNQ","KNQtable");
             System.out.println(1);
             int V = versionCtl.mergeVersion(0,1,"KNQ","KNQtable");
             System.out.println(1);
-            List<String> arrayList = versionCtl.getAllData(1,"KNQ","KNQtable");
+            List<String> arrayList = versionCtl.getAllData(0,"KNQ","KNQtable");
             System.out.println(1);
             System.out.println("Records : ");
             arrayList.forEach(data -> {
                 System.out.println(data);
             });
-            arrayList = versionCtl.getAllData(0,"KNQ","KNQtable");
+            arrayList = versionCtl.getAllData(1,"KNQ","KNQtable");
             System.out.println("Records : ");
             arrayList.forEach(data -> {
                 System.out.println(data);

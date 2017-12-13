@@ -4,6 +4,7 @@ import Utils.Constants;
 import Utils.DataFormatException;
 import Utils.RecordsUtils;
 import Utils.SLSystem;
+import storesystem.underlying.LoadDataHDFS;
 import storesystem.underlying.StoreDataHDFS;
 
 import java.io.BufferedReader;
@@ -17,10 +18,6 @@ public class StoreRecords implements StoreRecordsInterface {
 
     @Override
     public boolean storeRecords(String src, String database, String table) throws IOException, DataFormatException {
-
-        String dstHead = SLSystem.getURIHead(database, table);
-        StoreDataHDFS storeDataHDFSHead = new StoreDataHDFS(dstHead);
-
         BufferedReader bufferedReader = new BufferedReader(new FileReader(src));
 
         String str;
@@ -97,31 +94,53 @@ public class StoreRecords implements StoreRecordsInterface {
         HeadInfo.add(DBName);
         HeadInfo.add(TblName);
         HeadInfo.addAll(AttrInfo);
-
         recordStart = Offset;
+        HeadInfo.set(3, getBytes(recordStart)); // 真正记录recordStart
+
+        ArrayList<byte[]> personHeadInfo = new ArrayList<>();
         Offset = 0;
         String dst = SLSystem.getURI(database,table);
         StoreDataHDFS storeDataHDFS = new StoreDataHDFS(dst);
+        String dstHead = SLSystem.getURIHead(database, table);
+        StoreDataHDFS storeDataHDFSHead = new StoreDataHDFS(dstHead + 0);
+        personHeadInfo.add(getBytes(Offset));
         while ((str = bufferedReader.readLine()) != null){
-            if (recordNum % Constants.SUBFILESIZE == 0){
-                storeDataHDFS.close();
-                storeDataHDFS = new StoreDataHDFS(dst + recordNum / Constants.SUBFILESIZE);
-                Offset = 0;
-            }
+            /// 暂时不划分文件存储
+//            if (recordNum % Constants.SUBFILESIZE == 0){
+//                storeDataHDFS.close();
+//                storeDataHDFS = new StoreDataHDFS(dst + recordNum / Constants.SUBFILESIZE);
+//                Offset = 0;
+//            }
             byte[] tmp = getDataBytes(AttrInfo, str);
             if (tmp == null) continue;
+
+            if (recordNum % Constants.SUBHEADSIZE == 0 && recordNum != 0){
+                HeadInfo.set(4, getBytes(recordNum)); // 真正记录recordNum
+                storeDataHDFSHead.storeData(HeadInfo);
+                storeDataHDFSHead.storeData(personHeadInfo);
+                storeDataHDFSHead.close();
+
+                personHeadInfo = new ArrayList<>();
+                storeDataHDFSHead = new StoreDataHDFS(dstHead + recordNum / Constants.SUBHEADSIZE);
+                personHeadInfo.add(getBytes(Offset));
+            }
             int len = tmp.length;
-
-            storeDataHDFS.storeData(tmp);
             recordNum ++;
+            storeDataHDFS.storeData(tmp);
             Offset += len;
-            HeadInfo.add(getBytes(Offset));
+            personHeadInfo.add(getBytes(Offset));
         }
-        HeadInfo.set(3, getBytes(recordStart)); // 真正记录recordStart
         HeadInfo.set(4, getBytes(recordNum)); // 真正记录recordNum
-        storeDataHDFSHead.storeData(HeadInfo);
 
+        storeDataHDFSHead.storeData(HeadInfo);
+        storeDataHDFSHead.storeData(personHeadInfo);
         storeDataHDFSHead.close();
+
+        String totalRecordsuri = SLSystem.getURITotalRecords(database, table);
+        StoreDataHDFS storeDataHDFS1 = new StoreDataHDFS(totalRecordsuri);
+        storeDataHDFS1.storeData(getBytes(recordNum));
+        storeDataHDFS1.close();
+
         storeDataHDFS.close();
         return true;
     }
@@ -248,12 +267,19 @@ public class StoreRecords implements StoreRecordsInterface {
         byte[] oldHead = loadRecords.getHeadAll();
         byte[] headInfo = loadRecords.getHeadInfo();
         List<byte[]> attrInfo = loadRecords.getAttrsAndType();
-        byte[] newHeadInfo = new byte[headInfo.length + 4];
         int basicRecords = loadRecords.getBasicRecords();
 
-        int totalnum = SLSystem.byteArrayToInt(oldHead, 16) + 1;
-        byte[] totalnumByte = SLSystem.intToByteArray(totalnum);
-        System.arraycopy(totalnumByte ,0, oldHead, 16, 4); // 这四条语句用来修改总记录数
+        String totalRecords = SLSystem.getURITotalRecords(database, table);
+        LoadDataHDFS loadDataHDFS = new LoadDataHDFS(totalRecords);
+        byte[] totalRecordsNum = new byte[4];
+        loadDataHDFS.read(0, totalRecordsNum, 0, 4);
+        int totalNum = SLSystem.byteArrayToInt(totalRecordsNum, 0) + 1;
+        totalRecordsNum = SLSystem.intToByteArray(totalNum);
+        loadDataHDFS.destroy();
+        StoreDataHDFS storeDataHDFS = new StoreDataHDFS(totalRecords);
+        storeDataHDFS.storeData(totalRecordsNum);
+        storeDataHDFS.close(); // 修改总记录数17-12-12
+        System.arraycopy(totalRecordsNum ,0, oldHead, 16, 4); // 这四条语句用来修改总记录数
 
         List<byte[]> tmp = new ArrayList<>();
         for (int i = 0;i < attrInfo.size();i ++){
@@ -264,21 +290,34 @@ public class StoreRecords implements StoreRecordsInterface {
             tmp.add(tmp1);
             tmp.add(tmp2);
         }
-        byte[] newrecord = getDataBytes(tmp, record); // 获取新纪录的byte数组
+
+        int tmpindex = (totalNum - 1) / Constants.SUBHEADSIZE; // 存储头文件下标
 
         int lasInd = SLSystem.byteArrayToInt(headInfo,headInfo.length - 4);
-        if (totalnum == basicRecords + 1) lasInd = 0;
+        if (totalNum == basicRecords + 1) lasInd = 0;
 
+        byte[] newrecord = getDataBytes(tmp, record); // 获取新纪录的byte数组
         byte[] newLen = SLSystem.intToByteArray(newrecord.length + lasInd);
-        System.arraycopy(headInfo, 0, newHeadInfo, 0, headInfo.length);
-        System.arraycopy(newLen, 0, newHeadInfo, headInfo.length, newLen.length);
+
+        byte[] newHeadInfo = null;
+        if (tmpindex != (int)((totalNum - 2) / Constants.SUBHEADSIZE)){
+            newHeadInfo = new byte[Constants.INDEXLENGTH * 2];
+            System.arraycopy(headInfo, headInfo.length - Constants.INDEXLENGTH, newHeadInfo, 0, Constants.INDEXLENGTH);
+            System.arraycopy(newLen, 0, newHeadInfo, Constants.INDEXLENGTH, newLen.length);
+        }
+        else {
+            newHeadInfo = new byte[headInfo.length + Constants.INDEXLENGTH];
+            System.arraycopy(headInfo, 0, newHeadInfo, 0, headInfo.length);
+            System.arraycopy(newLen, 0, newHeadInfo, headInfo.length, newLen.length);
+        }
 
         ArrayList<byte[]> arrayList = new ArrayList<>();
         arrayList.add(oldHead);
         arrayList.add(newHeadInfo);
         // 存储headinfo
         String dst = SLSystem.getURIHead(database,table);
-        StoreDataHDFS storeDataHDFS = new StoreDataHDFS(dst);
+
+        storeDataHDFS = new StoreDataHDFS(dst + tmpindex);
         storeDataHDFS.storeData(arrayList);
         storeDataHDFS.close();
         // 存储append information
