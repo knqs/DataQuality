@@ -31,17 +31,18 @@ public class LoadRecords implements LoadRecordsInterface {
     }
 
     public byte[] getHeadInfo() {
-        return HeadInfo;
+        return HeadInfo.get(HeadInfo.size() - 1);
     }
 
     // 记录每条记录的开始地址
-    private byte[] HeadInfo;
+    private ArrayList<byte[]> HeadInfo = new ArrayList<>();
 
     public int getBasicRecords() {
         return basicRecords;
     }
 
     private int basicRecords = 0;
+    private int totalRecords = 0;
 
     public byte[] getHeadAll() {
         return headAll;
@@ -63,10 +64,25 @@ public class LoadRecords implements LoadRecordsInterface {
 
         // 获得原始记录数，用以确定从哪个文件中获取数据
         gainBasicRecords(dataBaseName,tableName);
-
+        getTotalRecords(dataBaseName, tableName);
+        int ind = (totalRecords - 1) / Constants.SUBHEADSIZE;
         String uri = SLSystem.getURIHead(dataBaseName, tableName);
-        this.loadData = new LoadDataHDFS(uri);
+        this.loadData = new LoadDataHDFS(uri + 0);
         Init(); // 获得所有的头部信息
+        for (int i = 0;i <= ind;i ++){
+            this.loadData = new LoadDataHDFS(uri + i);
+            getHeadInfos();
+        }
+        getHeadAlls();
+    }
+
+    private void getTotalRecords(String dataBaseName, String tableName) throws IOException {
+        String uri = SLSystem.getURITotalRecords(dataBaseName,tableName);
+        LoadDataHDFS loadDataHDFS = new LoadDataHDFS(uri);
+        byte[] tmpBasicRecords = new byte[4];
+        loadDataHDFS.read(0, tmpBasicRecords, 0, 4);
+        totalRecords = SLSystem.byteArrayToInt(tmpBasicRecords, 0);
+        loadDataHDFS.destroy();
     }
 
     private void gainBasicRecords(String dataBaseName, String tableName) throws IOException {
@@ -78,6 +94,28 @@ public class LoadRecords implements LoadRecordsInterface {
         loadDataHDFS.destroy();
     }
 
+    private void getHeadInfos() throws IOException {
+        byte[] recordNumT = new byte[4];
+        byte[] recordStartT = new byte[4];
+        loadData.read(12, recordStartT, 0,4);
+        int recordStart = SLSystem.byteArrayToInt(recordStartT,0);
+        loadData.read(16, recordNumT, 0,4);
+        int recordNum = SLSystem.byteArrayToInt(recordNumT,0);
+        recordNum = (recordNum - 1) % Constants.SUBHEADSIZE + 1;
+
+        byte[] tmpHeadInfo = new byte[recordNum * 4 + 4];
+        loadData.read(recordStart, tmpHeadInfo, 0, tmpHeadInfo.length);
+        HeadInfo.add(tmpHeadInfo);
+    }
+
+    private void getHeadAlls() throws IOException {
+        byte[] recordStartT = new byte[4];
+        loadData.read(12, recordStartT, 0,4);
+        int recordStart = SLSystem.byteArrayToInt(recordStartT,0);
+        headAll = new byte[recordStart];
+        loadData.read(0, headAll, 0, headAll.length);
+    }
+
     private void Init() throws IOException { // 需要大改
 
         byte[] DBl = new byte[4];
@@ -86,15 +124,14 @@ public class LoadRecords implements LoadRecordsInterface {
         byte[] recordStartT = new byte[4];
         loadData.read(0, DBl,0,4);
         loadData.read(8, attrNumT, 0,4);
+
         loadData.read(12, recordStartT, 0,4);
         loadData.read(16, recordNumT, 0,4);
-
-        int recordNum = SLSystem.byteArrayToInt(recordNumT,0);
         int recordStart = SLSystem.byteArrayToInt(recordStartT,0);
+
         int attrNum = SLSystem.byteArrayToInt(attrNumT,0);
         int DBL = SLSystem.byteArrayToInt(DBl,0);
 
-        HeadInfo = new byte[recordNum * 4];
         AttrInfo = new byte[attrNum];
 
         byte[] attrS = new byte[4];
@@ -108,10 +145,7 @@ public class LoadRecords implements LoadRecordsInterface {
 
 //        DBInfo = new byte[attrSI - DBL];
         attrAll = new byte[attrEI - attrSI];
-        headAll = new byte[recordStart];
         loadData.read(20, attrLocation,0,attrLocation.length);
-        loadData.read(recordStart, HeadInfo,0, HeadInfo.length);
-        loadData.read(0, headAll, 0, headAll.length);
 //        loadData.read(DBL, DBInfo, 0, DBInfo.length);
         loadData.read(attrSI, attrAll, 0, attrAll.length);
         int[] attrL = SLSystem.byteArrayToIntArray(attrLocation);
@@ -145,43 +179,42 @@ public class LoadRecords implements LoadRecordsInterface {
     public String getRecords(int num) throws IOException, DataFormatException {
         StringBuffer result = new StringBuffer();
         for (int i = 0;i < num;i ++){
-            if (Pos * 4 >= HeadInfo.length){
-                break;
-            }
-            else{
-                result.append(getNRecord(Pos ++));
-                result.append("\n");
-            }
+            result.append(getNRecord(Pos ++));
+            result.append("\n");
         }
         return new String(result);
     }
 
     @Override
     public String getNRecord(int num) throws IOException, DataFormatException {
-        num --;
-        if (num * 4 >= HeadInfo.length){
-            return null;
-        }
+        num --; // 索引从0开始，所以第一条记录的使用的实际num为0
+        if (num >= totalRecords) return null;
+
         String uri = null;
         LoadDataInterface loadData = null;
 
         if (num < basicRecords) {
             uri = SLSystem.getURI(dataBaseName, tableName);
-            int ind = (int) (num / Constants.SUBFILESIZE);
-            uri = uri + ind;
+            /// 不划分文件存储数据
+//            int ind = (int) (num / Constants.SUBFILESIZE);
+//            uri = uri + ind;
         }
         else uri = SLSystem.getURIAppend(dataBaseName, tableName);
 
         loadData = new LoadDataHDFS(uri);
 
+        int index = num / Constants.SUBHEADSIZE;
+//        if (num >= basicRecords){
+//            index = basicRecords / Constants.SUBHEADSIZE;
+//        }
+        num = num % Constants.SUBHEADSIZE ;
+        //num = num % Constants.SUBHEADSIZE;// 找到它在当前头文件中的位置
+
         int S ,E;
-        if (num == 0) {
-            S = 0;
-            E = SLSystem.byteArrayToInt(HeadInfo, num * 4);
-        } else {
-            S = SLSystem.byteArrayToInt(HeadInfo,num * 4 - 4);
-            E = SLSystem.byteArrayToInt(HeadInfo,num * 4);
-        }
+        if ((num  + 2) * Constants.INDEXLENGTH > HeadInfo.get(index).length) return null; // 越界，返回空
+        S = SLSystem.byteArrayToInt(HeadInfo.get(index),num * Constants.INDEXLENGTH);
+        E = SLSystem.byteArrayToInt(HeadInfo.get(index),(num + 1) * Constants.INDEXLENGTH);
+
         byte[] res = null;
         if (E > S){
             res  = new byte[E - S];

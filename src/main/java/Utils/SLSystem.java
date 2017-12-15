@@ -20,6 +20,10 @@ public class SLSystem {
     public static String getURIAppend(String database, String table) {
         return "hdfs://localhost:9000/database_" + database + '/' + table + "_Append";
     }
+
+    public static String getURITotalRecords(String database, String table) {
+        return "hdfs://localhost:9000/database_" + database + '/' + table + "_TotalRecords";
+    }
     //int转字节数组
     public static byte[] intToByteArray(int i) {
         byte[] result = new byte[4];
